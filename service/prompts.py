@@ -3,6 +3,7 @@
 from narr_mod.vogler_hero_journey import vogler_hero_journey
 from narr_mod.campbell_monomyth import campbell_monomyth
 from narr_mod.watts_eight_point_arc import watts_eight_point_arc
+from narr_mod.harmon_story_circle import harmon_story_circle
 
 def get_evaluation_prompt(structure_name, formatted_structure):
     if structure_name == "hero_journey":
@@ -17,17 +18,8 @@ def get_evaluation_prompt(structure_name, formatted_structure):
         return campbell_monomyth.get_prompt()
     elif structure_name == "watts_eight_point_arc":
         return watts_eight_point_arc.get_prompt()
-    else:
-        raise ValueError(f"Unknown structure name: {structure_name}")
-    
-
-def get_evaluation_prompt(structure_name, formatted_structure):
-    if structure_name == "hero_journey":
-        return hero_journey_prompt(formatted_structure)
-    elif structure_name == "three_act":
-        return three_act_prompt(formatted_structure)
-    elif structure_name == "four_act":
-        return four_act_prompt(formatted_structure)
+    elif structure_name == "harmon_story_circle":
+        return harmon_story_circle.get_prompt()
     else:
         raise ValueError(f"Unknown structure name: {structure_name}")
     
