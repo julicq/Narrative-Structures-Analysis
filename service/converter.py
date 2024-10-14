@@ -1,9 +1,19 @@
 def convert_to_format(structure, structure_name):
-    # Здесь будет логика преобразования извлеченной структуры
-    # в формат, соответствующий выбранной нарративной структуре
-    # Пока что вернем заглушку
+    if structure_name == "four_act":
+        return convert_to_four_act(structure)
+    else:
+        raise ValueError(f"Unknown structure name: {structure_name}")
+
+def convert_to_four_act(structure):
+    total_sentences = len(structure["sentences"])
+    act1 = total_sentences // 4
+    act2 = total_sentences // 4
+    act3 = total_sentences // 4
+    act4 = total_sentences - act1 - act2 - act3
+    
     return {
-        "act1": structure["chapters"][0],
-        "act2": structure["chapters"][1],
-        "act3": structure["chapters"][2]
+        "act1_setup": structure["sentences"][:act1],
+        "act2_complication": structure["sentences"][act1:act1+act2],
+        "act3_development": structure["sentences"][act1+act2:act1+act2+act3],
+        "act4_resolution": structure["sentences"][act1+act2+act3:]
     }

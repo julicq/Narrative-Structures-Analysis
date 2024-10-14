@@ -12,5 +12,6 @@ def evaluate_narrative(text, structure_name, llm):
     return {
         "structure_name": structure_name,
         "evaluation": evaluation,
-        "formatted_structure": formatted_structure
+        "formatted_structure": formatted_structure,
+        "raw_structure": structure
     }

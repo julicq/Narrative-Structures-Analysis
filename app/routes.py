@@ -9,10 +9,9 @@ llm = initialize_llm()
 def analyze_text():
     data = request.json
     text = data.get('text')
-    structure_name = data.get('structure')
     
-    if not text or not structure_name:
-        return jsonify({"error": "Missing text or structure name"}), 400
+    if not text:
+        return jsonify({"error": "Missing text"}), 400
     
-    result = evaluate_narrative(text, structure_name, llm)
+    result = evaluate_narrative(text, "four_act", llm)
     return jsonify(result)

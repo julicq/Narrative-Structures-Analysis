@@ -1,11 +1,19 @@
+import spacy
+
+nlp = spacy.load("en_core_web_sm")
+
 def extract_structure(text):
-    # Здесь будет логика извлечения структуры из текста
-    # Это может включать в себя разбивку на главы, определение ключевых моментов и т.д.
-    # Пока что вернем заглушку
-    return {
-        "chapters": [
-            {"title": "Начало", "content": text[:1000]},
-            {"title": "Середина", "content": text[1000:2000]},
-            {"title": "Конец", "content": text[2000:]}
-        ]
+    doc = nlp(text)
+    
+    # Простой пример извлечения структуры
+    sentences = [sent.text for sent in doc.sents]
+    entities = [ent.text for ent in doc.ents]
+    
+    structure = {
+        "sentences": sentences,
+        "entities": entities,
+        "word_count": len(doc),
+        "sentence_count": len(sentences)
     }
+    
+    return structure
