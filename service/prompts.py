@@ -1,6 +1,8 @@
 # service/prompts.py
 
 from narr_mod.vogler_hero_journey import vogler_hero_journey
+from narr_mod.campbell_monomyth import campbell_monomyth
+from narr_mod.watts_eight_point_arc import watts_eight_point_arc
 
 def get_evaluation_prompt(structure_name, formatted_structure):
     if structure_name == "hero_journey":
@@ -11,6 +13,10 @@ def get_evaluation_prompt(structure_name, formatted_structure):
         return four_act_prompt(formatted_structure)
     elif structure_name == "vogler_hero_journey":
         return vogler_hero_journey.get_prompt()
+    elif structure_name == "campbell_monomyth":
+        return campbell_monomyth.get_prompt()
+    elif structure_name == "watts_eight_point_arc":
+        return watts_eight_point_arc.get_prompt()
     else:
         raise ValueError(f"Unknown structure name: {structure_name}")
     
