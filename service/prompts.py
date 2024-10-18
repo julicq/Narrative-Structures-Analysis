@@ -4,6 +4,9 @@ from narr_mod.vogler_hero_journey import vogler_hero_journey
 from narr_mod.campbell_monomyth import campbell_monomyth
 from narr_mod.watts_eight_point_arc import watts_eight_point_arc
 from narr_mod.harmon_story_circle import harmon_story_circle
+from narr_mod.field_paradigm import field_paradigm
+from narr_mod.soth_story_structure import soth_story_structure
+from narr_mod.gulino_sequence_approach import gulino_sequence_approach
 
 def get_evaluation_prompt(structure_name, formatted_structure):
     if structure_name == "hero_journey":
@@ -20,6 +23,12 @@ def get_evaluation_prompt(structure_name, formatted_structure):
         return watts_eight_point_arc.get_prompt()
     elif structure_name == "harmon_story_circle":
         return harmon_story_circle.get_prompt()
+    elif structure_name == "field_paradigm":
+        return field_paradigm.get_prompt()
+    elif structure_name == "soth_story_structure":
+        return soth_story_structure.get_prompt()
+    elif structure_name == "gulino_sequence_approach":
+        return gulino_sequence_approach.get_prompt()
     else:
         raise ValueError(f"Unknown structure name: {structure_name}")
     
