@@ -1,4 +1,4 @@
-# naarr_mod/__init__.py
+# narr_mod/__init__.py
 
 from abc import ABC, abstractmethod
 from importlib import import_module
