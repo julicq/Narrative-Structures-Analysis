@@ -1,38 +1,23 @@
 # service/prompts.py
 
-from narr_mod.vogler_hero_journey import vogler_hero_journey
-from narr_mod.campbell_monomyth import campbell_monomyth
-from narr_mod.watts_eight_point_arc import watts_eight_point_arc
-from narr_mod.harmon_story_circle import harmon_story_circle
-from narr_mod.field_paradigm import field_paradigm
-from narr_mod.soth_story_structure import soth_story_structure
-from narr_mod.gulino_sequence_approach import gulino_sequence_approach
+from narr_mod import get_narrative_structure
 
 def get_evaluation_prompt(structure_name, formatted_structure):
-    if structure_name == "hero_journey":
-        return hero_journey_prompt(formatted_structure)
-    elif structure_name == "three_act":
-        return three_act_prompt(formatted_structure)
-    elif structure_name == "four_act":
-        return four_act_prompt(formatted_structure)
-    elif structure_name == "vogler_hero_journey":
-        return vogler_hero_journey.get_prompt()
-    elif structure_name == "campbell_monomyth":
-        return campbell_monomyth.get_prompt()
-    elif structure_name == "watts_eight_point_arc":
-        return watts_eight_point_arc.get_prompt()
-    elif structure_name == "harmon_story_circle":
-        return harmon_story_circle.get_prompt()
-    elif structure_name == "field_paradigm":
-        return field_paradigm.get_prompt()
-    elif structure_name == "soth_story_structure":
-        return soth_story_structure.get_prompt()
-    elif structure_name == "gulino_sequence_approach":
-        return gulino_sequence_approach.get_prompt()
-    else:
-        raise ValueError(f"Unknown structure name: {structure_name}")
-    
-
+    try:
+        narrative_structure = get_narrative_structure(structure_name)
+        return narrative_structure.get_prompt()
+    except ValueError:
+        # Обработка для старых структур, которые еще не переведены в новый формат
+        if structure_name == "hero_journey":
+            return hero_journey_prompt(formatted_structure)
+        elif structure_name == "three_act":
+            return three_act_prompt(formatted_structure)
+        elif structure_name == "four_act":
+            return four_act_prompt(formatted_structure)
+        else:
+            raise ValueError(f"Unknown structure name: {structure_name}")
+        
+        
 def hero_journey_prompt(structure):
     prompt = f"""
     Analyze the following narrative structure based on the Hero's Journey:
