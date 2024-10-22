@@ -13,6 +13,7 @@ flask-cors = "^5.0.0"
 langchain = "^0.0.325"
 spacy = "^3.7.0"
 ollama = "^0.3.3"
+nltk = "^3.9.1"
 
 
 [tool.poetry.group.dev.dependencies]
