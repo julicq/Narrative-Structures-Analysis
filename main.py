@@ -1,26 +1,42 @@
-### main.py
+# main.py
 
+import argparse
 import os
-from flask import Flask, request, jsonify
 from service.evaluator import evaluate_narrative
 from service.llm import initialize_llm
-from app import create_app
 
-app = create_app()
-llm = initialize_llm()
+def load_text_from_file(file_path):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        return file.read()
 
-@app.route('/analyze', methods=['POST'])
-def analyze_text():
-    data = request.json
-    text = data.get('text')
-    structure_name = data.get('structure')
+def main():
+    parser = argparse.ArgumentParser(description="Analyze narrative structure of a text file.")
+    parser.add_argument("file_path", help="Path to the text file to analyze")
+    parser.add_argument("structure_type", choices=["hero_journey", "three_act", "four_act"], 
+                        help="Type of narrative structure to analyze")
     
-    if not text or not structure_name:
-        return jsonify({"error": "Missing text or structure name"}), 400
+    args = parser.parse_args()
     
-    result = evaluate_narrative(text, structure_name, llm)
-    return jsonify(result)
+    if not os.path.exists(args.file_path):
+        print(f"Error: File '{args.file_path}' does not exist.")
+        return
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    text = load_text_from_file(args.file_path)
+    llm = initialize_llm()
+    
+    print(f"Analyzing file: {args.file_path}")
+    print(f"Using structure type: {args.structure_type}")
+    print("Please wait, this may take a few moments...")
+
+    result = evaluate_narrative(text, args.structure_type, llm)
+    
+    print("\nEvaluation Result:")
+    print(result["evaluation"])
+    
+    print("\nFormatted Structure:")
+    for key, value in result["formatted_structure"].items():
+        print(f"\n{key.capitalize()}:")
+        print(' '.join(value))
+
+if __name__ == "__main__":
+    main()
