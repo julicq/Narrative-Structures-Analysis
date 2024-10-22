@@ -2,7 +2,7 @@
 
 from narr_mod import NarrativeStructure
 
-class VoglerHeroJourney(NarrativeStructure):
+class SothStoryStructure(NarrativeStructure):
     def name(self) -> str:
         return "Путь героя (Крис Воглер)"
 
@@ -73,4 +73,4 @@ class VoglerHeroJourney(NarrativeStructure):
         return html
 
 # Создаем экземпляр класса для использования
-vogler_hero_journey = VoglerHeroJourney()
+vogler_hero_journey = SothStoryStructure()
