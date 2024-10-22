@@ -1,8 +1,8 @@
-# narr_mod/gulino_sequence_approach.py
+# narr_mod/gulino_sequence.py
 
 from narr_mod import NarrativeStructure
 
-class GulinoSequenceApproach(NarrativeStructure):
+class GulinoSequence(NarrativeStructure):
     def name(self) -> str:
         return "Последовательный подход (Пол Гулино)"
 
@@ -156,6 +156,3 @@ class GulinoSequenceApproach(NarrativeStructure):
         html += "</style>"
         
         return html
-
-# Создаем экземпляр класса для использования
-gulino_sequence_approach = GulinoSequenceApproach()

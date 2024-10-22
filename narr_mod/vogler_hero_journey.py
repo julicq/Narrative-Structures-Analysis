@@ -2,7 +2,7 @@
 
 from narr_mod import NarrativeStructure
 
-class SothStoryStructure(NarrativeStructure):
+class VoglerHeroJourney(NarrativeStructure):
     def name(self) -> str:
         return "Путь героя (Крис Воглер)"
 
@@ -63,14 +63,90 @@ class SothStoryStructure(NarrativeStructure):
         """
 
     def visualize(self, analysis_result: dict) -> str:
-        # Здесь мы можем добавить логику для создания HTML визуализации
-        # Пока что просто вернем базовый HTML
         html = "<h1>Путь героя (Крис Воглер)</h1>"
-        html += "<ul>"
-        for key, value in analysis_result.items():
-            html += f"<li><strong>{key}:</strong> {value}</li>"
-        html += "</ul>"
+        html += "<div class='vogler-journey'>"
+        
+        stages = [
+            ("Обычный мир", "ordinary-world"),
+            ("Зов к приключениям", "call-to-adventure"),
+            ("Отказ от зова", "refusal"),
+            ("Встреча с наставником", "mentor"),
+            ("Преодоление порога", "threshold"),
+            ("Испытания, союзники, враги", "tests"),
+            ("Приближение к пещере", "approach"),
+            ("Решающее испытание", "ordeal"),
+            ("Награда", "reward"),
+            ("Обратный путь", "road-back"),
+            ("Воскрешение", "resurrection"),
+            ("Возвращение с эликсиром", "return")
+        ]
+        
+        html += "<div class='journey-circle'>"
+        for i, (name, class_name) in enumerate(stages):
+            angle = i * 30 - 90  # начинаем с -90 градусов (12 часов)
+            html += f"<div class='stage {class_name}' style='transform: rotate({angle}deg) translate(150px) rotate(-{angle}deg);'>"
+            html += f"<div class='stage-name'>{name}</div>"
+            html += "</div>"
+        html += "</div>"
+        
+        html += "<div class='acts'>"
+        html += "<div class='act act-1'>Акт 1<br>Отъезд</div>"
+        html += "<div class='act act-2-3'>Акт 2 и 3<br>Инициация</div>"
+        html += "<div class='act act-4'>Акт 4<br>Возвращение</div>"
+        html += "</div>"
+        
+        html += "</div>"
+        
+        html += "<style>"
+        html += """
+            .vogler-journey {
+                width: 100%;
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+                font-family: Arial, sans-serif;
+                position: relative;
+            }
+            .journey-circle {
+                width: 300px;
+                height: 300px;
+                border-radius: 50%;
+                border: 2px solid #333;
+                margin: 0 auto;
+                position: relative;
+            }
+            .stage {
+                position: absolute;
+                width: 80px;
+                height: 80px;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                text-align: center;
+                font-size: 12px;
+            }
+            .stage-name {
+                background-color: #f0f0f0;
+                padding: 5px;
+                border-radius: 5px;
+            }
+            .acts {
+                display: flex;
+                justify-content: space-between;
+                margin-top: 20px;
+            }
+            .act {
+                text-align: center;
+                padding: 10px;
+                background-color: #f0f0f0;
+                border-radius: 5px;
+                flex: 1;
+                margin: 0 5px;
+            }
+        """
+        html += "</style>"
+        
         return html
 
 # Создаем экземпляр класса для использования
-vogler_hero_journey = SothStoryStructure()
+vogler_hero_journey = VoglerHeroJourney()
