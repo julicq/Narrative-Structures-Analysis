@@ -8,11 +8,11 @@ def convert_to_format(structure: dict, structure_name: str) -> dict[str, str]:
     elif structure_name == "hero_journey":
         return convert_to_hero_journey(structure)
     elif structure_name == "field_paradigm":
-        return convert_to_field_paradigm
+        return convert_to_field_paradigm(structure)
     elif structure_name == "harmon_story_circle":
-        return convert_to_harmon_story_circle
+        return convert_to_harmon_story_circle(structure)
     elif structure_name == "guilno_sequence":
-        return convert_to_gulino_sequence
+        return convert_to_gulino_sequence(structure)
     elif structure_name == "soth_story_structure":
         return convert_to_soth_story_structure(structure)
     elif structure_name == "vogler_hero_journey":
@@ -24,6 +24,8 @@ def convert_to_format(structure: dict, structure_name: str) -> dict[str, str]:
 
 
 def convert_to_hero_journey(structure: dict) -> dict[str, str]:
+    if not structure or "sentences" not in structure:
+        return {"error": "Invalid or empty structure"}
     return {
         "ordinary_world": ' '.join(structure["sentences"][:2]),
         "call_to_adventure": ' '.join(structure["sentences"][2:4]),
@@ -34,6 +36,9 @@ def convert_to_hero_journey(structure: dict) -> dict[str, str]:
     }
 
 def convert_to_four_act(structure: dict) -> dict[str, str]:
+    if not structure or "sentences" not in structure:
+        return {"error": "Invalid or empty structure"}
+
     total_sentences = len(structure["sentences"])
     act1 = total_sentences // 4
     act2 = total_sentences // 4
@@ -48,6 +53,9 @@ def convert_to_four_act(structure: dict) -> dict[str, str]:
     }
 
 def convert_to_three_act(structure: dict) -> dict[str, str]:
+    if not structure or "sentences" not in structure:
+        return {"error": "Invalid or empty structure"}
+    
     total_sentences = len(structure["sentences"])
     act1 = total_sentences // 4
     act2 = total_sentences // 2
@@ -60,6 +68,9 @@ def convert_to_three_act(structure: dict) -> dict[str, str]:
     }
 
 def convert_to_field_paradigm(structure: dict) -> dict[str, str]:
+    if not structure or "sentences" not in structure:
+        return {"error": "Invalid or empty structure"}
+    
     total_sentences = len(structure["sentences"])
     setup = total_sentences // 4
     confrontation = total_sentences // 2
@@ -72,6 +83,9 @@ def convert_to_field_paradigm(structure: dict) -> dict[str, str]:
     }
 
 def convert_to_harmon_story_circle(structure: dict) -> dict[str, str]:
+    if not structure or "sentences" not in structure:
+        return {"error": "Invalid or empty structure"}
+    
     total_sentences = len(structure["sentences"])
     step_size = total_sentences // 8
     
@@ -87,6 +101,9 @@ def convert_to_harmon_story_circle(structure: dict) -> dict[str, str]:
     }
 
 def convert_to_gulino_sequence(structure: dict) -> dict[str, str]:
+    if not structure or "sentences" not in structure:
+        return {"error": "Invalid or empty structure"}
+    
     total_sentences = len(structure["sentences"])
     act1 = total_sentences // 4
     act2_3 = total_sentences // 2
@@ -110,6 +127,9 @@ def convert_to_gulino_sequence(structure: dict) -> dict[str, str]:
     }
 
 def convert_to_soth_story_structure(structure: dict) -> dict[str, str]:
+    if not structure or "sentences" not in structure:
+        return {"error": "Invalid or empty structure"}
+    
     total_sentences = len(structure["sentences"])
     step_size = total_sentences // 9
     
@@ -126,6 +146,9 @@ def convert_to_soth_story_structure(structure: dict) -> dict[str, str]:
     }
 
 def convert_to_vogler_hero_journey(structure: dict) -> dict[str, str]:
+    if not structure or "sentences" not in structure:
+        return {"error": "Invalid or empty structure"}
+    
     total_sentences = len(structure["sentences"])
     step_size = total_sentences // 12
     
@@ -145,6 +168,9 @@ def convert_to_vogler_hero_journey(structure: dict) -> dict[str, str]:
     }
 
 def convert_to_watts_eight_point_arc(structure: dict) -> dict[str, str]:
+    if not structure or "sentences" not in structure:
+        return {"error": "Invalid or empty structure"}
+    
     total_sentences = len(structure["sentences"])
     step_size = total_sentences // 8
     

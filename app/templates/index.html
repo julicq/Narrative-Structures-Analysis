@@ -30,10 +30,10 @@
                 const resultDiv = document.getElementById('result');
                 resultDiv.innerHTML = `
                     <div class="monomyth-analysis">
-                        <h1 class="text-2xl font-bold text-center mb-6">Анализ структуры: ${data.structure_name}</h1>
+                        <h1 class="text-2xl font-bold text-center mb-6">Structure Analysis: ${data.structure_name}</h1>
                         
                         <div class="analysis-section mb-8">
-                            <h2 class="text-xl font-semibold mb-4 text-blue-600">Структурный анализ</h2>
+                            <h2 class="text-xl font-semibold mb-4 text-blue-600">Structural analysis</h2>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 ${Object.entries(data.structure_analysis).map(([key, value]) => `
                                     <div class="bg-white p-4 rounded shadow">
@@ -45,14 +45,14 @@
                         </div>
                         
                         <div class="analysis-section mb-8">
-                            <h2 class="text-xl font-semibold mb-4 text-blue-600">Оценка сценария</h2>
+                            <h2 class="text-xl font-semibold mb-4 text-blue-600">Script assessment</h2>
                             <div class="bg-white p-4 rounded shadow">
                                 ${data.llm_evaluation.split('\n\n').map(paragraph => `<p class="mb-2">${paragraph}</p>`).join('')}
                             </div>
                         </div>
                         
                         <div class="analysis-section">
-                            <h2 class="text-xl font-semibold mb-4 text-blue-600">Визуализация</h2>
+                            <h2 class="text-xl font-semibold mb-4 text-blue-600">Visualization</h2>
                             <div class="flex justify-center">
                                 ${data.visualization}
                             </div>

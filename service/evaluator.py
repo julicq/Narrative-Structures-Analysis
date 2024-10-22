@@ -45,8 +45,20 @@ class NarrativeEvaluator:
         NarrativeStructureClass = get_narrative_structure(structure_name)
         narrative_structure = NarrativeStructureClass()
         
-        prompt = narrative_structure.get_prompt().format(**formatted_structure)
-        llm_evaluation = self.llm(prompt)
+        # Проверяем, является ли formatted_structure словарем
+        if not isinstance(formatted_structure, dict):
+            print(f"Warning: formatted_structure is not a dict. Type: {type(formatted_structure)}")
+            formatted_structure = {}  # Создаем пустой словарь, если это не словарь
+        
+        # Безопасное форматирование промпта
+        prompt = narrative_structure.get_prompt()
+        try:
+            formatted_prompt = prompt.format(**formatted_structure)
+        except KeyError as e:
+            print(f"KeyError when formatting prompt: {e}")
+            formatted_prompt = prompt  # Используем оригинальный промпт, если форматирование не удалось
+        
+        llm_evaluation = self.llm(formatted_prompt)
         
         structure_analysis = narrative_structure.analyze(formatted_structure)
         visualization = narrative_structure.visualize(structure_analysis)
@@ -59,6 +71,7 @@ class NarrativeEvaluator:
             "formatted_structure": formatted_structure,
             "raw_structure": structure
         }
+
 
     def analyze(self, text):
         structure_name = self.classify(text)
