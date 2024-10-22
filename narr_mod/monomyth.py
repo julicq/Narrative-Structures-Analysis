@@ -1,0 +1,1 @@
+from .campbell_monomyth import CampbellMonomyth as Monomyth

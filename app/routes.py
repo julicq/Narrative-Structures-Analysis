@@ -1,11 +1,15 @@
 # app/routes.py
 
-from flask import Blueprint, request, jsonify
-from service.evaluator import evaluate_narrative
-from service.llm import initialize_llm
+from flask import Blueprint, request, jsonify, render_template
+from service import initialize_llm, NarrativeEvaluator
 
 main_bp = Blueprint('main', __name__)
 llm = initialize_llm()
+evaluator = NarrativeEvaluator(llm)
+
+@main_bp.route('/', methods=['GET'])
+def index():
+    return render_template('index.html')
 
 @main_bp.route('/analyze', methods=['POST'])
 def analyze_text():
@@ -15,5 +19,5 @@ def analyze_text():
     if not text:
         return jsonify({"error": "Missing text"}), 400
     
-    result = evaluate_narrative(text, "four_act", llm)
+    result = evaluator.analyze(text)
     return jsonify(result)

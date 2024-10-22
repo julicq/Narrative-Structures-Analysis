@@ -1,26 +1,22 @@
-### main.py
+# app.py
 
-import os
-from flask import Flask, request, jsonify
-from service.evaluator import evaluate_narrative
-from service.llm import initialize_llm
-from app import create_app
+from flask import Flask, render_template, request, jsonify
+from service import initialize_llm, NarrativeEvaluator
 
-app = create_app()
+app = Flask(__name__)
+
+# Инициализация LLM и NarrativeEvaluator
 llm = initialize_llm()
+evaluator = NarrativeEvaluator(llm)
 
-@app.route('/analyze', methods=['POST'])
-def analyze_text():
-    data = request.json
-    text = data.get('text')
-    structure_name = data.get('structure')
-    
-    if not text or not structure_name:
-        return jsonify({"error": "Missing text or structure name"}), 400
-    
-    result = evaluate_narrative(text, structure_name, llm)
-    return jsonify(result)
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    if request.method == 'POST':
+        data = request.json
+        text = data['text']
+        result = evaluator.analyze(text)
+        return jsonify(result)
+    return render_template('index.html')
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(debug=True)

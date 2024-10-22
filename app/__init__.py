@@ -5,14 +5,11 @@ from flask_cors import CORS
 from config import Config
 
 def create_app(config_class=Config):
-    app = Flask(__name__)
+    app = Flask(__name__, template_folder='templates')
     app.config.from_object(config_class)
 
     # Инициализация CORS
     CORS(app)
-
-    # Инициализация других расширений Flask, если они есть
-    # например, db = SQLAlchemy(app)
 
     from app.routes import main_bp
     app.register_blueprint(main_bp)
