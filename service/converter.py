@@ -5,6 +5,8 @@ def convert_to_format(structure, structure_name):
         return convert_to_four_act(structure)
     elif structure_name == "three_act":
         return convert_to_three_act(structure)
+    elif structure_name == "hero_journey":
+        return convert_to_hero_journey(structure)
     else:
         raise ValueError(f"Unknown structure name: {structure_name}")
 
