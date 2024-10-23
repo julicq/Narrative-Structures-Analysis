@@ -4,7 +4,7 @@ from narr_mod import NarrativeStructure
 
 class CampbellMonomyth(NarrativeStructure):
     def name(self) -> str:
-        return "Мономиф (Джозеф Кэмпбелл)"
+        return "The Monomyth (Joseph Campbell)"
 
     def analyze(self, formatted_structure: dict) -> dict:
         # Здесь можно добавить более сложную логику анализа
@@ -53,50 +53,63 @@ class CampbellMonomyth(NarrativeStructure):
         """
 
     def visualize(self, analysis_result: dict) -> str:
-        html = "<h1>Мономиф (Джозеф Кэмпбелл)</h1>"
-        html += "<div class='monomyth-circle'>"
+        html = """
+        <h1>Мономиф (Джозеф Кэмпбелл)</h1>
+        <div id='monomyth-container'>
+            <div id='monomyth-circle'></div>
+        """
         
         stages = [
-            ("Обычный мир", "ordinary-world"),
-            ("Зов к приключениям", "call-to-adventure"),
-            ("Отказ от зова", "refusal-of-call"),
-            ("Встреча с наставником", "meeting-mentor"),
-            ("Преодоление первого порога", "crossing-threshold"),
-            ("Испытания, союзники, враги", "tests-allies-enemies"),
-            ("Приближение к сокровенному убежищу", "approach-inmost-cave"),
-            ("Решающее испытание", "ordeal"),
-            ("Награда", "reward"),
-            ("Путь назад", "road-back"),
-            ("Воскрешение", "resurrection"),
-            ("Возвращение с эликсиром", "return-with-elixir")
+            "Обычный мир",
+            "Зов к приключениям",
+            "Отказ от зова",
+            "Встреча с наставником",
+            "Преодоление первого порога",
+            "Испытания, союзники, враги",
+            "Приближение к сокровенному убежищу",
+            "Решающее испытание",
+            "Награда",
+            "Путь назад",
+            "Воскрешение",
+            "Возвращение с эликсиром"
         ]
         
-        for i, (stage_name, stage_class) in enumerate(stages):
-            angle = i * 30 - 90  # Start from top (-90 degrees)
-            html += f"<div class='stage {stage_class}' style='transform: rotate({angle}deg) translate(150px) rotate(-{angle}deg);'>{stage_name}</div>"
+        for i, stage_name in enumerate(stages):
+            html += f"<div class='stage' style='--i:{i};'>{stage_name}</div>"
         
         html += "</div>"
         
-        html += "<style>"
         html += """
-            .monomyth-circle {
+        <style>
+            #monomyth-container {
                 width: 400px;
                 height: 400px;
-                border-radius: 50%;
-                border: 2px solid #333;
                 position: relative;
                 margin: 50px auto;
+            }
+            #monomyth-circle {
+                width: 100%;
+                height: 100%;
+                border-radius: 50%;
+                border: 2px solid #333;
+                position: absolute;
             }
             .stage {
                 position: absolute;
                 width: 100px;
                 text-align: center;
-                transform-origin: center;
+                left: 50%;
+                top: 50%;
+                font-size: 12px;
+                line-height: 1.2;
+                transform-origin: 0 300px;
+                transform: rotate(calc(30deg * var(--i))) translateY(-300px) rotate(calc(-30deg * var(--i)));
             }
+            .stage:hover {
+                font-weight: bold;
+                z-index: 10;
+            }
+        </style>
         """
-        html += "</style>"
         
         return html
-
-# Создаем экземпляр класса для использования
-campbell_monomyth = CampbellMonomyth()
