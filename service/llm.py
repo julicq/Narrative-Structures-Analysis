@@ -8,7 +8,7 @@ def initialize_llm():
     callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
     
     llm = Ollama(
-        model="llama3.1",  # Используем модель llama3.1
+        model="llama3.2",  # Используем модель llama3.2
         callback_manager=callback_manager,
         verbose=True
     )
