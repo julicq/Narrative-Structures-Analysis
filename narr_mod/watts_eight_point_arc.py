@@ -4,7 +4,7 @@ from narr_mod import NarrativeStructure
 
 class WattsEightPointArc(NarrativeStructure):
     def name(self) -> str:
-        return "Восьмиточечная арка (Найджел Уоттс)"
+        return "Eight Point Arch (Nigel Watts)"
 
     def analyze(self, formatted_structure: dict) -> dict:
         # Здесь можно добавить более сложную логику анализа

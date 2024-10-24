@@ -4,7 +4,7 @@ from narr_mod import NarrativeStructure
 
 class VoglerHeroJourney(NarrativeStructure):
     def name(self) -> str:
-        return "Путь героя (Крис Воглер)"
+        return "Hero's journey (Chris Vogler)"
 
     def analyze(self, formatted_structure: dict) -> dict:
         # Здесь мы можем добавить логику анализа структуры
@@ -63,90 +63,65 @@ class VoglerHeroJourney(NarrativeStructure):
         """
 
     def visualize(self, analysis_result: dict) -> str:
-        html = "<h1>Путь героя (Крис Воглер)</h1>"
-        html += "<div class='vogler-journey'>"
+        html = """
+        <h1>Путь героя (Крис Воглер)</h1>
+        <div id='vogler-container'>
+            <div id='vogler-circle'></div>
+        """
         
         stages = [
-            ("Обычный мир", "ordinary-world"),
-            ("Зов к приключениям", "call-to-adventure"),
-            ("Отказ от зова", "refusal"),
-            ("Встреча с наставником", "mentor"),
-            ("Преодоление порога", "threshold"),
-            ("Испытания, союзники, враги", "tests"),
-            ("Приближение к пещере", "approach"),
-            ("Решающее испытание", "ordeal"),
-            ("Награда", "reward"),
-            ("Обратный путь", "road-back"),
-            ("Воскрешение", "resurrection"),
-            ("Возвращение с эликсиром", "return")
+            "Обычный мир",
+            "Зов к приключениям",
+            "Отказ от зова",
+            "Встреча с наставником",
+            "Преодоление порога",
+            "Испытания, союзники, враги",
+            "Приближение к пещере",
+            "Решающее испытание",
+            "Награда",
+            "Обратный путь",
+            "Воскрешение",
+            "Возвращение с эликсиром"
         ]
         
-        html += "<div class='journey-circle'>"
-        for i, (name, class_name) in enumerate(stages):
-            angle = i * 30 - 90  # начинаем с -90 градусов (12 часов)
-            html += f"<div class='stage {class_name}' style='transform: rotate({angle}deg) translate(150px) rotate(-{angle}deg);'>"
-            html += f"<div class='stage-name'>{name}</div>"
-            html += "</div>"
-        html += "</div>"
-        
-        html += "<div class='acts'>"
-        html += "<div class='act act-1'>Акт 1<br>Отъезд</div>"
-        html += "<div class='act act-2-3'>Акт 2 и 3<br>Инициация</div>"
-        html += "<div class='act act-4'>Акт 4<br>Возвращение</div>"
-        html += "</div>"
+        for i, stage_name in enumerate(stages):
+            html += f"<div class='stage' style='--i:{i};'>{stage_name}</div>"
         
         html += "</div>"
         
-        html += "<style>"
         html += """
-            .vogler-journey {
-                width: 100%;
-                max-width: 600px;
-                margin: 0 auto;
-                padding: 20px;
-                font-family: Arial, sans-serif;
+        <style>
+            #vogler-container {
+                width: 400px;
+                height: 400px;
                 position: relative;
+                margin: 50px auto;
             }
-            .journey-circle {
-                width: 300px;
-                height: 300px;
+            #vogler-circle {
+                width: 100%;
+                height: 100%;
                 border-radius: 50%;
                 border: 2px solid #333;
-                margin: 0 auto;
-                position: relative;
+                position: absolute;
             }
             .stage {
                 position: absolute;
-                width: 80px;
-                height: 80px;
-                display: flex;
-                justify-content: center;
-                align-items: center;
+                width: 100px;
                 text-align: center;
+                left: 50%;
+                top: 50%;
                 font-size: 12px;
+                line-height: 1.2;
+                transform-origin: 0 200px;
+                transform: rotate(calc(30deg * var(--i))) translateY(-200px) rotate(calc(-30deg * var(--i)));
             }
-            .stage-name {
-                background-color: #f0f0f0;
-                padding: 5px;
-                border-radius: 5px;
+            .stage:hover {
+                font-weight: bold;
+                z-index: 10;
             }
-            .acts {
-                display: flex;
-                justify-content: space-between;
-                margin-top: 20px;
-            }
-            .act {
-                text-align: center;
-                padding: 10px;
-                background-color: #f0f0f0;
-                border-radius: 5px;
-                flex: 1;
-                margin: 0 5px;
-            }
+        </style>
+
+        
         """
-        html += "</style>"
         
         return html
-
-# Создаем экземпляр класса для использования
-vogler_hero_journey = VoglerHeroJourney()

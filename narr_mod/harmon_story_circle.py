@@ -4,7 +4,7 @@ from narr_mod import NarrativeStructure
 
 class HarmonStoryCircle(NarrativeStructure):
     def name(self) -> str:
-        return "Сюжетный круг (Дэн Хармон)"
+        return "Story Circle (Dan Harmon)"
 
     def analyze(self, formatted_structure: dict) -> dict:
         # Здесь можно добавить более сложную логику анализа
