@@ -188,5 +188,3 @@ class ThreeAct(NarrativeStructure):
         
         return html
 
-# Создаем экземпляр класса для использования
-three_act_structure = ThreeAct()

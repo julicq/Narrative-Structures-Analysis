@@ -25,18 +25,6 @@ main_bp = Blueprint('main', __name__)
 llm = initialize_llm()
 evaluator = NarrativeEvaluator(llm)
 
-# Маппинг структур
-STRUCTURE_MAPPING = {
-    "Eight Point Arch (Nigel Watts)": "watts_eight_point_arc",
-    "Hero's journey (Chris Vogler)": "vogler_hero_journey",
-    "Four-Act Structure": "four_act",
-    "Paradigm (Sid Field)": "field_paradigm",
-    "Three-Act Structure": "three_act",
-    "The Monomyth (Joseph Campbell)": "hero_journey",
-    "The Structure of Story (Chris Soth)": "soth_story_structure",
-    "Story Circle (Dan Harmon)": "harmon_story_circle"
-}
-
 # Список доступных нарративных структур (используется для отображения в интерфейсе)
 NARRATIVE_STRUCTURES = list(STRUCTURE_MAPPING.keys())
 

@@ -107,5 +107,3 @@ class HarmonStoryCircle(NarrativeStructure):
         
         return html
 
-# Создаем экземпляр класса для использования
-harmon_story_circle = HarmonStoryCircle()

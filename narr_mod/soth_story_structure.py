@@ -142,5 +142,3 @@ class SothStoryStructure(NarrativeStructure):
         
         return html
 
-# Создаем экземпляр класса для использования
-soth_story_structure = SothStoryStructure()

@@ -23,8 +23,9 @@ class NarrativeEvaluator:
         6. The Monomyth (Joseph Campbell)
         7. The Structure of Story (Chris Soth)
         8. Story Circle (Dan Harmon)
+        9. Consistent Approach (Paul Gulino)
 
-        Provide your answer as a single word: "8-point-arc", "hero_journey", "three_act", "four_act", "monomyth", "soth_story_structure", "story_circle" or "field_paradigm".
+        Provide your answer as a single word: "watts_eight_point_arc", "hero_journey", "three_act", "four_act", "monomyth", "soth_story_structure", "harmon_story_circle", "field_paradigm" or "gulino_sequence".
         If none of these structures fit, return "unknown" - only if there is no REALLY a way to determine the type of structure.
 
         Text: {text}
