@@ -7,19 +7,23 @@
 ``curl -sSL https://install.python-poetry.org | python3 -``
 
 
-3. Clone the repository:
+2. Clone the repository:
    
 ``git clone https://github.com/yourusername/narrative-analysis.git``
 ``cd narrative-analysis``
 
 
-5. Install dependencies:
+3. Install dependencies:
    
 ``poetry install``
 
-7. Run the Flask application:
+4. Start env.shell
+
+``poetry shell``
+
+5. Run the Flask application:
    
-``python main.py``
+``python run.py``
 
 The application will be available at `http://localhost:5000`.
 
