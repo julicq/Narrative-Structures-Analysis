@@ -4,7 +4,7 @@ from narr_mod import NarrativeStructure
 
 class FieldParadigm(NarrativeStructure):
     def name(self) -> str:
-        return "Парадигма (Сид Филд)"
+        return "Paradigm (Sid Field)"
 
     def analyze(self, formatted_structure: dict) -> dict:
         # Здесь можно добавить более сложную логику анализа
@@ -124,5 +124,3 @@ class FieldParadigm(NarrativeStructure):
         
         return html
 
-# Создаем экземпляр класса для использования
-field_paradigm = FieldParadigm()

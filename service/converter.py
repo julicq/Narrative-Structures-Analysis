@@ -11,7 +11,7 @@ def convert_to_format(structure: dict, structure_name: str) -> dict[str, str]:
         return convert_to_field_paradigm(structure)
     elif structure_name == "harmon_story_circle":
         return convert_to_harmon_story_circle(structure)
-    elif structure_name == "guilno_sequence":
+    elif structure_name == "gulino_sequence":
         return convert_to_gulino_sequence(structure)
     elif structure_name == "soth_story_structure":
         return convert_to_soth_story_structure(structure)

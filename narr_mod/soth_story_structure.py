@@ -4,7 +4,7 @@ from narr_mod import NarrativeStructure
 
 class SothStoryStructure(NarrativeStructure):
     def name(self) -> str:
-        return "Структура истории (Крис Сот)"
+        return "The Structure of Story (Chris Soth)"
 
     def analyze(self, formatted_structure: dict) -> dict:
         # Здесь можно добавить более сложную логику анализа
@@ -142,5 +142,3 @@ class SothStoryStructure(NarrativeStructure):
         
         return html
 
-# Создаем экземпляр класса для использования
-soth_story_structure = SothStoryStructure()
