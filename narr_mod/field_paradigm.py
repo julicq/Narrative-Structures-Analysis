@@ -124,5 +124,3 @@ class FieldParadigm(NarrativeStructure):
         
         return html
 
-# Создаем экземпляр класса для использования
-field_paradigm = FieldParadigm()
