@@ -116,9 +116,9 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
 
 def main():
     # Получение токена из переменных окружения
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    token = os.getenv("TELEGRAM_TOKEN")
     if not token:
-        logger.error("Не найден токен для Telegram бота. Убедитесь, что вы установили TELEGRAM_BOT_TOKEN в файле .env")
+        logger.error("Не найден токен для Telegram бота. Убедитесь, что вы установили TELEGRAM_TOKEN в файле .env")
         return
 
     app = ApplicationBuilder().token(token).build()
