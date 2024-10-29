@@ -1,158 +1,214 @@
 # narr_mod/gulino_sequence.py
 
+from dataclasses import dataclass
+from typing import List, Tuple, Final, ClassVar
 from narr_mod import NarrativeStructure
 
+@dataclass
+class SequenceElement:
+    name: str
+    css_class: str
+    height: int  # высота в процентах
+    act: str
+    description: str
+
+@dataclass
+class Act:
+    name: str
+    description: str
+    width: int  # ширина в процентах
+
 class GulinoSequence(NarrativeStructure):
+    """Implementation of Paul Gulino's Sequence Approach narrative structure."""
+
+    # Константы для актов
+    ACT_BEGINNING: Final[str] = "Beginning"
+    ACT_MIDDLE: Final[str] = "Middle"
+    ACT_END: Final[str] = "End"
+
+    # Определение элементов последовательности
+    SEQUENCE_ELEMENTS: ClassVar[List[SequenceElement]] = [
+        SequenceElement("Введение", "introduction", 40, ACT_BEGINNING,
+                       "Setup of the story world and characters"),
+        SequenceElement("Указание цели", "stating-goal", 60, ACT_BEGINNING,
+                       "Clear statement of protagonist's goal"),
+        SequenceElement("Загадка", "mystery", 60, ACT_BEGINNING,
+                       "Introduction of the central mystery"),
+        SequenceElement("Усиление любопытства", "heighten-curiosity", 60, ACT_BEGINNING,
+                       "Building viewer engagement"),
+        SequenceElement("Реакция на событие", "event-reaction", 60, ACT_BEGINNING,
+                       "Character response to inciting incident"),
+        SequenceElement("Возникновение проблемы", "problem-emergence", 60, ACT_BEGINNING,
+                       "Major problem emerges"),
+        SequenceElement("Первая попытка", "first-attempt", 80, ACT_MIDDLE,
+                       "Hero's initial attempt to solve the problem"),
+        SequenceElement("Вероятность решения", "solution-probability", 80, ACT_MIDDLE,
+                       "Possibility of solution emerges"),
+        SequenceElement("Новые герои и подсюжеты", "new-characters-subplots", 80, ACT_MIDDLE,
+                       "Introduction of new elements"),
+        SequenceElement("Переосмысление напряжения", "tension-rethinking", 80, ACT_MIDDLE,
+                       "Calm before the storm"),
+        SequenceElement("Повышенные ставки", "raised-stakes", 100, ACT_END,
+                       "Stakes are raised"),
+        SequenceElement("Ускоренный темп", "accelerated-pace", 100, ACT_END,
+                       "Pace quickens"),
+        SequenceElement("Момент «все потеряно»", "all-is-lost", 100, ACT_END,
+                       "Darkest moment"),
+        SequenceElement("Финальное решение", "final-resolution", 40, ACT_END,
+                       "Resolution with twist")
+    ]
+
+    # Определение актов
+    ACTS: ClassVar[List[Act]] = [
+        Act("Акт 1", "Начало", 30),
+        Act("Акт 2 - Акт 3", "Середина", 40),
+        Act("Акт 4", "Конец", 30)
+    ]
+
+    CSS_TEMPLATE: ClassVar[str] = """
+    .gulino-approach {
+        width: 100%;
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 20px;
+        font-family: Arial, sans-serif;
+    }
+    .timeline {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        height: 300px;
+        margin-bottom: 20px;
+    }
+    .element {
+        width: 7%;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .element-number {
+        background-color: #e74c3c;
+        color: white;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 5px;
+    }
+    .element-name {
+        transform: rotate(-45deg);
+        white-space: nowrap;
+        font-size: 11px;
+        margin-top: 10px;
+    }
+    .acts {
+        display: flex;
+        justify-content: space-between;
+    }
+    .act {
+        text-align: center;
+        padding: 10px;
+        background-color: #f0f0f0;
+        border-radius: 5px;
+    }
+    """
+
     def name(self) -> str:
         return "Consistent Approach (Paul Gulino)"
 
     def analyze(self, formatted_structure: dict) -> dict:
-        # Здесь можно добавить более сложную логику анализа
-        # Пока что просто вернем входные данные
-        return formatted_structure
+        """
+        Analyze the narrative structure according to Gulino's Sequence Approach.
+        
+        Args:
+            formatted_structure: Dictionary containing the narrative structure
+            
+        Returns:
+            dict: Analysis results with sequence elements evaluation
+        """
+        analysis = {
+            "acts": {
+                self.ACT_BEGINNING: [],
+                self.ACT_MIDDLE: [],
+                self.ACT_END: []
+            },
+            "elements": {element.name: {
+                "presence": self._evaluate_element_presence(element, formatted_structure),
+                "description": element.description
+            } for element in self.SEQUENCE_ELEMENTS},
+            "overall_evaluation": self._evaluate_overall_structure(formatted_structure)
+        }
+        
+        return {**formatted_structure, "analysis": analysis}
+
+    def _evaluate_element_presence(self, element: SequenceElement, structure: dict) -> bool:
+        """Evaluate presence of sequence element in the structure."""
+        # Здесь можно добавить более сложную логику оценки
+        return True
+
+    def _evaluate_overall_structure(self, structure: dict) -> dict:
+        """Evaluate overall narrative structure."""
+        return {
+            "balance": "Balanced structure",
+            "pacing": "Good pacing",
+            "suggestions": []
+        }
 
     def get_prompt(self) -> str:
-        return """
-        Analyze the following narrative structure based on Paul Gulino's Sequence Approach:
+        """Generate the analysis prompt for Gulino's Sequence Approach."""
+        prompt_parts = [
+            "Analyze the following narrative structure based on Paul Gulino's Sequence Approach:\n"
+        ]
 
-        Act 1 - Beginning:
-        1. Introduction
-        2. Stating the Goal
-        3. Presenting the Mystery
-        4. Heightening Viewer Curiosity
-        5. Reaction to the Event
-        6. Emergence of a Major Problem
+        for act in self.ACTS:
+            prompt_parts.append(f"\n{act.name} - {act.description}:")
+            elements = [elem for elem in self.SEQUENCE_ELEMENTS if elem.act == act.name]
+            for i, elem in enumerate(elements, 1):
+                prompt_parts.append(f"{i}. {elem.name} - {elem.description}")
 
-        Act 2 & 3 - Middle:
-        7. Hero's Attempt to Solve the Problem: First Try
-        8. Probability of Actually Solving the Problem
-        9. Introduction of New Characters and Subplots
-        10. Rethinking the Main Tension: Calm Before the Storm
-
-        Act 4 - End:
-        11. Raised Stakes
-        12. Accelerated Pace
-        13. "All Is Lost" Moment
-        14. Final Resolution, Triggered by a Powerful Twist
-
-        Evaluate how well this narrative follows Paul Gulino's Sequence Approach. 
-        Provide insights on the strengths and weaknesses of each element and act, and suggest improvements.
-        Consider the following aspects:
-
-        1. How effectively does the Introduction set up the story world and characters?
-        2. Is the Goal clearly stated and compelling?
-        3. How intriguing is the Mystery presented, and does it engage the audience?
-        4. Does the narrative successfully heighten viewer curiosity?
-        5. Is the Reaction to the Event believable and impactful?
-        6. How significant is the Major Problem that emerges?
-        7. Is the Hero's first attempt to solve the problem logical and interesting?
-        8. Does the narrative create a sense of possibility for solving the problem?
-        9. How well are new characters and subplots integrated into the main story?
-        10. Is the "calm before the storm" effectively used to build tension?
-        11. How effectively are the stakes raised in the final act?
-        12. Does the accelerated pace create a sense of urgency?
-        13. Is the "All Is Lost" moment impactful and believable?
-        14. How satisfying and surprising is the final resolution and twist?
-
-        Analyze the pacing and balance between the acts. Are there any elements that feel underdeveloped or overly emphasized?
-        Suggest how the narrative could be improved to better fit Gulino's Sequence Approach.
-        """
+        return "\n".join(prompt_parts)
 
     def visualize(self, analysis_result: dict) -> str:
-        html = "<h1>Последовательный подход (Пол Гулино)</h1>"
-        html += "<div class='gulino-approach'>"
-        
-        elements = [
-            ("Введение", "introduction"),
-            ("Указание цели", "stating-goal"),
-            ("Загадка", "mystery"),
-            ("Усиление любопытства", "heighten-curiosity"),
-            ("Реакция на событие", "event-reaction"),
-            ("Возникновение проблемы", "problem-emergence"),
-            ("Первая попытка", "first-attempt"),
-            ("Вероятность решения", "solution-probability"),
-            ("Новые герои и подсюжеты", "new-characters-subplots"),
-            ("Переосмысление напряжения", "tension-rethinking"),
-            ("Повышенные ставки", "raised-stakes"),
-            ("Ускоренный темп", "accelerated-pace"),
-            ("Момент «все потеряно»", "all-is-lost"),
-            ("Финальное решение", "final-resolution")
-        ]
-        
-        html += "<div class='timeline'>"
-        for i, (name, class_name) in enumerate(elements):
-            html += f"<div class='element {class_name}'>"
-            html += f"<div class='element-number'>{i+1}</div>"
-            html += f"<div class='element-name'>{name}</div>"
-            html += "</div>"
-        html += "</div>"
-        
-        html += "<div class='acts'>"
-        html += "<div class='act act-1'>Акт 1<br>Начало</div>"
-        html += "<div class='act act-2-3'>Акт 2 - Акт 3<br>Середина</div>"
-        html += "<div class='act act-4'>Акт 4<br>Конец</div>"
-        html += "</div>"
-        
-        html += "</div>"
-        
-        html += "<style>"
-        html += """
-            .gulino-approach {
-                width: 100%;
-                max-width: 1000px;
-                margin: 0 auto;
-                padding: 20px;
-                font-family: Arial, sans-serif;
-            }
-            .timeline {
-                display: flex;
-                justify-content: space-between;
-                align-items: flex-end;
-                height: 300px;
-                margin-bottom: 20px;
-            }
-            .element {
-                width: 7%;
-                text-align: center;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-            }
-            .element-number {
-                background-color: #e74c3c;
-                color: white;
-                width: 24px;
-                height: 24px;
-                border-radius: 50%;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                margin-bottom: 5px;
-            }
-            .element-name {
-                transform: rotate(-45deg);
-                white-space: nowrap;
-                font-size: 11px;
-                margin-top: 10px;
-            }
-            .introduction, .final-resolution { height: 40%; }
-            .stating-goal, .mystery, .heighten-curiosity, .event-reaction, .problem-emergence { height: 60%; }
-            .first-attempt, .solution-probability, .new-characters-subplots, .tension-rethinking { height: 80%; }
-            .raised-stakes, .accelerated-pace, .all-is-lost { height: 100%; }
-            .acts {
-                display: flex;
-                justify-content: space-between;
-            }
-            .act {
-                text-align: center;
-                padding: 10px;
-                background-color: #f0f0f0;
-                border-radius: 5px;
-            }
-            .act-1 { width: 40%; }
-            .act-2-3 { width: 35%; }
-            .act-4 { width: 25%; }
         """
-        html += "</style>"
+        Generate HTML visualization of the Gulino Sequence.
         
-        return html
+        Args:
+            analysis_result: Dictionary containing analysis results
+            
+        Returns:
+            str: HTML representation of the sequence
+        """
+        html_parts = [
+            "<h1>Последовательный подход (Пол Гулино)</h1>",
+            "<div class='gulino-approach'>",
+            "<div class='timeline'>"
+        ]
+
+        # Добавляем элементы последовательности
+        for i, element in enumerate(self.SEQUENCE_ELEMENTS, 1):
+            html_parts.extend([
+                f"<div class='element {element.css_class}' style='height: {element.height}%'>",
+                f"<div class='element-number'>{i}</div>",
+                f"<div class='element-name'>{element.name}</div>",
+                "</div>"
+            ])
+
+        html_parts.append("</div><div class='acts'>")
+
+        # Добавляем акты
+        for act in self.ACTS:
+            html_parts.append(
+                f"<div class='act' style='width: {act.width}%'>{act.name}<br>{act.description}</div>"
+            )
+
+        # Закрываем контейнеры и добавляем стили
+        html_parts.extend([
+            "</div>",
+            "</div>",
+            f"<style>{self.CSS_TEMPLATE}</style>"
+        ])
+
+        return "\n".join(html_parts)

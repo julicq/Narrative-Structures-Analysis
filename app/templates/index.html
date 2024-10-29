@@ -3,57 +3,288 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Analyze narrative structure of your scripts and stories">
+    <meta name="keywords" content="narrative analysis, story structure, script analysis">
+    <meta name="author" content="Your Company Name">
     <title>Narrative Structure Analyzer</title>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
+    <!-- jQuery from CDN with SRI hash -->
+    <script 
+        src="https://code.jquery.com/jquery-3.6.0.min.js" 
+        integrity="sha384-vtXRMe3mGCbOeY7l30aIg8H9p3GdeSe4IFlP6G8JMa7o7lXvnz3GFKzPxzJdPfGK"
+        crossorigin="anonymous"
+    ></script>
+
     <style>
+        :root {
+            --primary-color: #4CAF50;
+            --primary-hover: #45a049;
+            --bg-color: #f0f0f0;
+            --text-color: #333;
+            --border-radius: 5px;
+            --spacing: 20px;
+            --error-color: #ff0000;
+            --error-bg: #ffe6e6;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Arial, sans-serif;
             max-width: 800px;
             margin: 0 auto;
-            padding: 20px;
+            padding: var(--spacing);
+            color: var(--text-color);
+            line-height: 1.6;
+            background-color: #fff;
         }
-        textarea, select, input[type="file"] {
+
+        h1 {
+            color: var(--primary-color);
+            margin-bottom: var(--spacing);
+            text-align: center;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        textarea, 
+        select, 
+        input[type="file"] {
             width: 100%;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: var(--border-radius);
+            font-size: 16px;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
         }
+
+        textarea {
+            min-height: 200px;
+            resize: vertical;
+        }
+
+        textarea:focus, 
+        select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 5px rgba(76, 175, 80, 0.2);
+        }
+
         button {
-            padding: 10px 20px;
-            background-color: #4CAF50;
+            padding: 12px 24px;
+            background-color: var(--primary-color);
             color: white;
             border: none;
+            border-radius: var(--border-radius);
             cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            width: 100%;
+            max-width: 200px;
+            margin: 0 auto;
+            display: block;
         }
+
+        button:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
         #result {
-            margin-top: 20px;
+            margin-top: 30px;
+            opacity: 0;
+            transition: opacity 0.5s ease;
         }
+
+        #result.visible {
+            opacity: 1;
+        }
+
         .section {
-            background-color: #f0f0f0;
-            padding: 15px;
-            margin-bottom: 15px;
-            border-radius: 5px;
+            background-color: var(--bg-color);
+            padding: var(--spacing);
+            margin-bottom: var(--spacing);
+            border-radius: var(--border-radius);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
+
         .section h2 {
             margin-top: 0;
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 5px;
+            margin-bottom: 15px;
+        }
+
+        .loading {
+            opacity: 0.5;
+            pointer-events: none;
+            position: relative;
+        }
+
+        .loading::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 30px;
+            height: 30px;
+            margin: -15px 0 0 -15px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .error {
+            color: var(--error-color);
+            padding: 10px;
+            background-color: var(--error-bg);
+            border-radius: var(--border-radius);
+            margin-bottom: 15px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            
+            .section {
+                padding: 15px;
+            }
+            
+            button {
+                max-width: none;
+            }
+        }
+
+        /* Accessibility improvements */
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0,0,0,0);
+            border: 0;
+        }
+
+        /* Focus styles */
+        :focus {
+            outline: 2px solid var(--primary-color);
+            outline-offset: 2px;
+        }
+
+        /* File input styling */
+        .file-input-wrapper {
+            position: relative;
+            margin-bottom: 15px;
+        }
+
+        .file-input-wrapper input[type="file"] {
+            opacity: 0;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .file-input-wrapper label {
+            display: block;
+            padding: 10px;
+            background: #fff;
+            border: 1px dashed #ccc;
+            border-radius: var(--border-radius);
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .file-input-wrapper:hover label {
+            border-color: var(--primary-color);
         }
     </style>
 </head>
 <body>
     <h1>Narrative Structure Analyzer</h1>
-    <form id="analyzeForm" enctype="multipart/form-data">
-        <textarea name="text" rows="10" placeholder="Paste your script here..."></textarea>
-        <br>
-        <input type="file" name="file" accept=".txt,.pdf,.doc,.docx">
-        <br>
-        <select name="structure">
-            <option value="">Auto-detect</option>
-            {% for structure in structures %}
-            <option value="{{ structure }}">{{ structure }}</option>
-            {% endfor %}
-        </select>
-        <br>
-        <button type="submit">Analyze</button>
+    
+    <form id="analyzeForm" enctype="multipart/form-data" role="form">
+        <!-- CSRF Token - исправленная версия -->
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        
+        <div class="form-group">
+            <label for="text">Script Text</label>
+            <textarea 
+                id="text"
+                name="text" 
+                placeholder="Paste your script here..."
+                aria-label="Script text input"
+                maxlength="50000"
+            ></textarea>
+        </div>
+        
+        <div class="form-group file-input-wrapper">
+            <label for="file">
+                <span class="file-label">Upload File (Max 5MB)</span>
+                <span class="file-name"></span>
+            </label>
+            <input 
+                id="file"
+                type="file" 
+                name="file" 
+                accept=".txt,.pdf,.doc,.docx"
+                aria-label="File upload"
+                data-max-size="5242880"
+            >
+        </div>
+        
+        <div class="form-group">
+            <label for="structure">Structure Type</label>
+            <select 
+                id="structure"
+                name="structure"
+                aria-label="Select structure type"
+            >
+                <option value="">Auto-detect</option>
+                {% for structure in structures %}
+                <option value="{{ structure }}">{{ structure }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <button 
+            type="submit"
+            aria-label="Analyze script"
+        >Analyze</button>
     </form>
-    <div id="result">
+
+    <div id="result" role="region" aria-live="polite">
         <div id="structure" class="section">
             <h2>Structure</h2>
             <p></p>
@@ -69,9 +300,60 @@
 
     <script>
         $(document).ready(function() {
-            $('#analyzeForm').submit(function(e) {
+            const form = $('#analyzeForm');
+            const result = $('#result');
+            const fileInput = $('input[type="file"]');
+            const maxFileSize = fileInput.data('max-size');
+            
+            // Получаем CSRF-токен
+            const csrfToken = $('input[name="csrf_token"]').val();
+            
+            // Настраиваем AJAX для работы с CSRF
+            $.ajaxSetup({
+                beforeSend: function(xhr, settings) {
+                    if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
+                        xhr.setRequestHeader("X-CSRFToken", csrfToken);
+                    }
+                }
+            });
+            
+            // File input handler
+            fileInput.change(function() {
+                const file = this.files[0];
+                const fileName = file ? file.name : '';
+                const fileLabel = $(this).siblings('label').find('.file-name');
+                
+                if (fileName) {
+                    if (file.size > maxFileSize) {
+                        showError('File size exceeds 5MB limit');
+                        this.value = '';
+                        fileLabel.text('');
+                        return;
+                    }
+                    
+                    $('textarea[name="text"]').val('');
+                    fileLabel.text(fileName);
+                } else {
+                    fileLabel.text('');
+                }
+            });
+
+            // Form submission
+            form.submit(function(e) {
                 e.preventDefault();
-                var formData = new FormData(this);
+                const formData = new FormData(this);
+
+                // Добавляем CSRF-токен в FormData
+                formData.append('csrf_token', csrfToken);
+
+                if (!formData.get('text') && !formData.get('file').size) {
+                    showError('Please provide either text or a file to analyze');
+                    return;
+                }
+
+                form.addClass('loading');
+                result.find('.section p').html('Analyzing...');
+                result.addClass('visible');
 
                 $.ajax({
                     url: '/analyze',
@@ -80,19 +362,60 @@
                     processData: false,
                     contentType: false,
                     success: function(response) {
+                        form.removeClass('loading');
+                        
                         $('#structure p').text(response.structure || 'Auto-detected');
-                        $('#analysis p').html(response.analysis.replace(/\n/g, '<br>'));
+                        
+                        $('#analysis p').html(
+                            response.analysis
+                                .replace(/\n/g, '<br>')
+                                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                        );
+                        
                         if (response.visualization) {
-                            $('#visualization').html('<h2>Visualization</h2>' + response.visualization);
+                            $('#visualization').html(
+                                '<h2>Visualization</h2>' + response.visualization
+                            );
                         } else {
-                            $('#visualization').html('<h2>Visualization</h2><p>No visualization available for this structure.</p>');
+                            $('#visualization').html(
+                                '<h2>Visualization</h2>' +
+                                '<p>No visualization available for this structure.</p>'
+                            );
                         }
+
+                        result[0].scrollIntoView({ 
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
                     },
-                    error: function(xhr, status, error) {
-                        $('#result').html('Error: ' + xhr.responseJSON.error);
+                    error: function(xhr) {
+                        form.removeClass('loading');
+                        showError(xhr.responseJSON?.error || 'An error occurred during analysis');
                     }
                 });
             });
+
+            function showError(message) {
+                $('.error').remove();
+                
+                const errorDiv = $('<div>')
+                    .addClass('error')
+                    .attr('role', 'alert')
+                    .text(message);
+                
+                form.prepend(errorDiv);
+                
+                setTimeout(() => {
+                    errorDiv.fadeOut('slow', function() {
+                        $(this).remove();
+                    });
+                }, 5000);
+
+                errorDiv[0].scrollIntoView({ 
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }
         });
     </script>
 </body>
