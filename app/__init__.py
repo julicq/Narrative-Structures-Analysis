@@ -1,15 +1,32 @@
 # app/__init__.py
 
 from flask import Flask
-from config import Config
+from flask_wtf.csrf import CSRFProtect
+from shared.config import Config
 from app.routes import main_bp
 import os
+
+csrf = CSRFProtect()
 
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # Ensure the upload folder exists
+    # Настройка секретного ключа для CSRF
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here')
+    
+    # Инициализация CSRF защиты
+    csrf.init_app(app)
+
+    # Настройка конфигурации
+    app.config['UPLOAD_FOLDER'] = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), 
+        'uploads'
+    )
+    app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max-limit
+    app.config['ALLOWED_EXTENSIONS'] = {'txt', 'pdf', 'doc', 'docx'}
+    
+    # Создаем папку для загрузок, если она не существует
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
     app.register_blueprint(main_bp)

@@ -1,115 +1,164 @@
 # narr_mod/campbell_monomyth.py
 
+from dataclasses import dataclass
+from typing import Final, ClassVar
 from narr_mod import NarrativeStructure
 
+@dataclass
+class MonomythStage:
+    name: str
+    description: str
+    phase: str
+
 class CampbellMonomyth(NarrativeStructure):
+    """Implementation of Joseph Campbell's Monomyth (Hero's Journey) structure."""
+
+    # Константы для фаз
+    SEPARATION: Final[str] = "Separation"
+    INITIATION: Final[str] = "Initiation"
+    RETURN: Final[str] = "Return"
+
+    # Определение стадий мономифа
+    STAGES: ClassVar[list[MonomythStage]] = [
+        MonomythStage("Обычный мир", "The ordinary world before the adventure", SEPARATION),
+        MonomythStage("Зов к приключениям", "The call to adventure", SEPARATION),
+        MonomythStage("Отказ от зова", "Refusal of the call", SEPARATION),
+        MonomythStage("Встреча с наставником", "Meeting with the mentor", SEPARATION),
+        MonomythStage("Преодоление первого порога", "Crossing the first threshold", SEPARATION),
+        MonomythStage("Испытания, союзники, враги", "Tests, allies and enemies", INITIATION),
+        MonomythStage("Приближение к сокровенному убежищу", "Approach to the inmost cave", INITIATION),
+        MonomythStage("Решающее испытание", "The ordeal", INITIATION),
+        MonomythStage("Награда", "The reward", INITIATION),
+        MonomythStage("Путь назад", "The road back", RETURN),
+        MonomythStage("Воскрешение", "Resurrection", RETURN),
+        MonomythStage("Возвращение с эликсиром", "Return with the elixir", RETURN),
+    ]
+
+    PROMPT_TEMPLATE: ClassVar[str] = """
+    Analyze the following narrative structure based on Joseph Campbell's "Monomyth" (The Hero's Journey):
+
+    Act 1 - Beginning (Separation):
+    - Call to Adventure
+    - Refusal of the Call
+    - Supernatural Aid
+    - Crossing the First Threshold
+
+    Act 2 & 3 - Middle (Initiation):
+    - Belly of the Whale
+    - Road of Trials
+    - Meeting with the Goddess
+    - Woman as Temptress
+    - Atonement with the Father
+    - Apotheosis
+    - The Ultimate Boon
+    - Refusal of the Return
+    - Magic Flight
+
+    Act 4 - End (Return):
+    - Rescue from Without
+    - The Crossing of the Return Threshold
+    - Master of Two Worlds
+    - Freedom to Live
+
+    Evaluation Criteria:
+    1. How well does the story represent the three main phases: {phases}?
+    2. Is the hero's transformation evident throughout the journey?
+    3. How effectively are the supernatural elements incorporated?
+    4. Are the challenges and trials sufficiently impactful?
+    5. Does the return phase demonstrate the hero's growth?
+
+    Please analyze pacing and balance between acts, noting any underdeveloped or overemphasized stages.
+    Provide improvement suggestions to better align with Campbell's structure.
+    """
+
+    CSS_TEMPLATE: ClassVar[str] = """
+    #monomyth-container {
+        width: 400px;
+        height: 400px;
+        position: relative;
+        margin: 50px auto;
+    }
+    #monomyth-circle {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        border: 2px solid #333;
+        position: absolute;
+    }
+    .stage {
+        position: absolute;
+        width: 100px;
+        text-align: center;
+        left: 50%;
+        top: 50%;
+        font-size: 12px;
+        line-height: 1.2;
+        transform-origin: 0 300px;
+        transform: rotate(calc(30deg * var(--i))) translateY(-300px) rotate(calc(-30deg * var(--i)));
+    }
+    .stage:hover {
+        font-weight: bold;
+        color: #0066cc;
+        cursor: pointer;
+    }
+    """
+
     def name(self) -> str:
         return "The Monomyth (Joseph Campbell)"
 
     def analyze(self, formatted_structure: dict) -> dict:
-        # Здесь можно добавить более сложную логику анализа
-        # Пока что просто вернем входные данные
-        return formatted_structure
+        """
+        Analyze the narrative structure according to Campbell's Monomyth.
+        
+        Args:
+            formatted_structure: Dictionary containing the narrative structure
+            
+        Returns:
+            dict: Analysis results with phases and stages evaluation
+        """
+        # В будущем здесь можно добавить более сложную логику анализа
+        analysis = {
+            "phases": {
+                self.SEPARATION: [],
+                self.INITIATION: [],
+                self.RETURN: []
+            },
+            "stages": {stage.name: {} for stage in self.STAGES},
+            "overall_evaluation": {}
+        }
+        
+        return {**formatted_structure, "analysis": analysis}
 
     def get_prompt(self) -> str:
-        return """
-        Analyze the following narrative structure based on Joseph Campbell's "Monomyth" (The Hero's Journey):
-
-        Act 1 - Beginning (Separation):
-        - Call to Adventure
-        - Refusal of the Call
-        - Supernatural Aid
-        - Crossing the First Threshold
-
-        Act 2 & 3 - Middle (Initiation):
-        - Belly of the Whale
-        - Road of Trials
-        - Meeting with the Goddess
-        - Woman as Temptress
-        - Atonement with the Father
-        - Apotheosis
-        - The Ultimate Boon
-        - Refusal of the Return
-        - Magic Flight
-
-        Act 4 - End (Return):
-        - Rescue from Without
-        - The Crossing of the Return Threshold
-        - Master of Two Worlds
-        - Freedom to Live
-
-        Evaluate how well this narrative follows Joseph Campbell's "Monomyth" structure. 
-        Provide insights on the strengths and weaknesses of each stage and act, and suggest improvements.
-        Consider the following aspects:
-
-        1. How well does the story represent the three main phases: Separation, Initiation, and Return?
-        2. Is the hero's transformation evident throughout the journey?
-        3. How effectively are the supernatural elements incorporated into the story?
-        4. Are the challenges and trials faced by the hero sufficiently impactful and transformative?
-        5. Does the return phase demonstrate the hero's growth and the impact of their journey on their world?
-
-        Analyze the pacing and balance between the acts. Are there any stages that feel underdeveloped or overly emphasized?
-        Suggest how the narrative could be improved to better fit Campbell's Monomyth structure.
-        """
+        """Generate the analysis prompt for the Monomyth structure."""
+        phases = ", ".join([self.SEPARATION, self.INITIATION, self.RETURN])
+        return self.PROMPT_TEMPLATE.format(phases=phases)
 
     def visualize(self, analysis_result: dict) -> str:
-        html = """
-        <h1>Мономиф (Джозеф Кэмпбелл)</h1>
-        <div id='monomyth-container'>
-            <div id='monomyth-circle'></div>
         """
+        Generate HTML visualization of the Monomyth structure.
         
-        stages = [
-            "Обычный мир",
-            "Зов к приключениям",
-            "Отказ от зова",
-            "Встреча с наставником",
-            "Преодоление первого порога",
-            "Испытания, союзники, враги",
-            "Приближение к сокровенному убежищу",
-            "Решающее испытание",
-            "Награда",
-            "Путь назад",
-            "Воскрешение",
-            "Возвращение с эликсиром"
+        Args:
+            analysis_result: Dictionary containing analysis results
+            
+        Returns:
+            str: HTML representation of the Monomyth wheel
+        """
+        html_parts = [
+            "<h1>Мономиф (Джозеф Кэмпбелл)</h1>",
+            "<div id='monomyth-container'>",
+            "<div id='monomyth-circle'></div>"
         ]
-        
-        for i, stage_name in enumerate(stages):
-            html += f"<div class='stage' style='--i:{i};'>{stage_name}</div>"
-        
-        html += "</div>"
-        
-        html += """
-        <style>
-            #monomyth-container {
-                width: 400px;
-                height: 400px;
-                position: relative;
-                margin: 50px auto;
-            }
-            #monomyth-circle {
-                width: 100%;
-                height: 100%;
-                border-radius: 50%;
-                border: 2px solid #333;
-                position: absolute;
-            }
-            .stage {
-                position: absolute;
-                width: 100px;
-                text-align: center;
-                left: 50%;
-                top: 50%;
-                font-size: 12px;
-                line-height: 1.2;
-                transform-origin: 0 300px;
-                transform: rotate(calc(30deg * var(--i))) translateY(-300px) rotate(calc(-30deg * var(--i)));
-            }
-            .stage:hover {
-                font-weight: bold;
-                z-index: 10;
-            }
-        </style>
-        """
-        
-        return html
+
+        # Добавляем стадии
+        for i, stage in enumerate(self.STAGES):
+            stage_div = f"<div class='stage' style='--i:{i};'>{stage.name}</div>"
+            html_parts.append(stage_div)
+
+        # Закрываем контейнер
+        html_parts.append("</div>")
+
+        # Добавляем стили
+        html_parts.append(f"<style>{self.CSS_TEMPLATE}</style>")
+
+        return "\n".join(html_parts)

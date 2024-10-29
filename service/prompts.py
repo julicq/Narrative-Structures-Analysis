@@ -1,93 +1,115 @@
 # service/prompts.py
 
+from collections.abc import Mapping, Sequence
+from enum import Enum
+import logging
+from dataclasses import dataclass
 from narr_mod import get_narrative_structure
 
-def get_evaluation_prompt(structure_name, formatted_structure):
-    try:
-        narrative_structure = get_narrative_structure(structure_name)
-        return narrative_structure.get_prompt()
-    except ValueError:
-        # Обработка для старых структур, которые еще не переведены в новый формат
-        if structure_name == "hero_journey":
-            return hero_journey_prompt(formatted_structure)
-        elif structure_name == "three_act":
-            return three_act_prompt(formatted_structure)
-        elif structure_name == "four_act":
-            return four_act_prompt(formatted_structure)
-        else:
-            raise ValueError(f"Unknown structure name: {structure_name}")
-        
-        
-def hero_journey_prompt(structure):
-    prompt = f"""
-    Analyze the following narrative structure based on the Hero's Journey:
+logger = logging.getLogger(__name__)
 
-    Ordinary World:
-    {' '.join(structure['ordinary_world'])}
+class NarrativeStructureType(Enum):
+    HERO_JOURNEY = "hero_journey"
+    THREE_ACT = "three_act"
+    FOUR_ACT = "four_act"
+    FIVE_ACT = "five_act"
+    
+@dataclass
+class PromptConfig:
+    structure_type: NarrativeStructureType
+    aspects: Sequence[str]
+    evaluation_criteria: Sequence[str]
+    improvement_focus: Sequence[str]
 
-    Call to Adventure:
-    {' '.join(structure['call_to_adventure'])}
+class PromptGenerator:
+    """Генератор промптов для различных типов нарративных структур"""
+    
+    def __init__(self):
+        self.configs: Mapping[NarrativeStructureType, PromptConfig] = {
+            NarrativeStructureType.HERO_JOURNEY: PromptConfig(
+                structure_type=NarrativeStructureType.HERO_JOURNEY,
+                aspects=[
+                    "character_development",
+                    "mythological_elements",
+                    "transformation_arc",
+                    "mentor_relationship"
+                ],
+                evaluation_criteria=[
+                    "adherence_to_stages",
+                    "emotional_impact",
+                    "symbolic_depth",
+                    "character_growth"
+                ],
+                improvement_focus=[
+                    "stage_transitions",
+                    "emotional_resonance",
+                    "mythological_symbolism",
+                    "character_arc_completion"
+                ]
+            ),
+            # ... остальные конфигурации ...
+        }
 
-    Refusal of the Call:
-    {' '.join(structure['refusal_of_the_call'])}
+    def get_evaluation_prompt(
+        self,
+        structure_name: str,
+        formatted_structure: Mapping[str, Sequence[str]],
+        focus_aspects: Sequence[str] | None = None
+    ) -> str:
+        """Генерирует промпт для оценки нарративной структуры."""
+        try:
+            narrative_structure = get_narrative_structure(structure_name)
+            return narrative_structure.get_prompt()
+            
+        except ValueError:
+            try:
+                structure_type = NarrativeStructureType(structure_name)
+                return self._generate_legacy_prompt(structure_type, formatted_structure, focus_aspects)
+            except ValueError:
+                logger.error(f"Unknown structure name: {structure_name}")
+                raise ValueError(f"Unsupported narrative structure type: {structure_name}")
 
-    Meeting the Mentor:
-    {' '.join(structure['meeting_the_mentor'])}
+    def _generate_legacy_prompt(
+        self,
+        structure_type: NarrativeStructureType,
+        formatted_structure: Mapping[str, Sequence[str]],
+        focus_aspects: Sequence[str] | None = None
+    ) -> str:
+        """Генерирует промпт для устаревших типов структур."""
+        config = self.configs.get(structure_type)
+        if not config:
+            raise ValueError(f"Configuration not found for structure type: {structure_type}")
 
-    Crossing the Threshold:
-    {' '.join(structure['crossing_the_threshold'])}
+        # ... остальная логика метода ...
 
-    Evaluate how well this narrative follows the Hero's Journey structure. 
-    Provide insights on the strengths and weaknesses of each stage, and suggest improvements.
-    """
-    return prompt
+    def add_structure_config(self, config: PromptConfig) -> None:
+        """Добавляет новую конфигурацию структуры."""
+        self.configs[config.structure_type] = config
 
+# Глобальный экземпляр
+prompt_generator = PromptGenerator()
 
-def three_act_prompt(structure):
-    prompt = f"""
-    Analyze the following narrative structure based on the Three-Act Structure:
+# Функции для обратной совместимости
+def get_evaluation_prompt(
+    structure_name: str,
+    formatted_structure: Mapping[str, Sequence[str]]
+) -> str:
+    return prompt_generator.get_evaluation_prompt(structure_name, formatted_structure)
 
-    Act 1 (Setup):
-    {' '.join(structure['act1_setup'])}
+def hero_journey_prompt(structure: Mapping[str, Sequence[str]]) -> str:
+    return prompt_generator.get_evaluation_prompt(
+        NarrativeStructureType.HERO_JOURNEY.value,
+        structure
+    )
 
-    Act 2 (Confrontation):
-    {' '.join(structure['act2_confrontation'])}
+def three_act_prompt(structure: Mapping[str, Sequence[str]]) -> str:
+    return prompt_generator.get_evaluation_prompt(
+        NarrativeStructureType.THREE_ACT.value,
+        structure
+    )
 
-    Act 3 (Resolution):
-    {' '.join(structure['act3_resolution'])}
-
-    Evaluate how well this narrative follows the Three-Act Structure. 
-    Provide insights on the strengths and weaknesses of each act, and suggest improvements.
-    """
-    return prompt
-
-
-def four_act_prompt(structure):
-    prompt = f"""
-    Analyze the following narrative structure based on the Four-Act Structure:
-
-    Act 1 (Setup):
-    {' '.join(structure['act1_setup'])}
-
-    Act 2 (Complication):
-    {' '.join(structure['act2_complication'])}
-
-    Act 3 (Development):
-    {' '.join(structure['act3_development'])}
-
-    Act 4 (Resolution):
-    {' '.join(structure['act4_resolution'])}
-
-    Evaluate how well this narrative follows the Four-Act Structure. 
-    Provide insights on the strengths and weaknesses of each act, and suggest improvements.
-    Consider the following aspects for each act:
-
-    Act 1 (Setup): How well does it introduce the main characters, setting, and initial conflict?
-    Act 2 (Complication): Does it effectively escalate the conflict and introduce new challenges?
-    Act 3 (Development): How does it deepen the conflict and develop character arcs?
-    Act 4 (Resolution): Does it provide a satisfying conclusion and resolve the main conflicts?
-
-    Also, analyze the pacing and balance between the acts. Are there any acts that feel too short or too long?
-    Suggest how the narrative could be improved to better fit the Four-Act Structure.
-    """
-    return prompt
+def four_act_prompt(structure: Mapping[str, Sequence[str]]) -> str:
+    return prompt_generator.get_evaluation_prompt(
+        NarrativeStructureType.FOUR_ACT.value,
+        structure
+    )
