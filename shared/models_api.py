@@ -111,6 +111,12 @@ class ModelAPI:
                 analysis_text = result.content if hasattr(result, 'content') else str(result)
             
             logger.info("Analysis completed successfully")
+            
+            return {
+                'status': 'success',
+                'analysis': analysis_text,
+                'model_info': self.get_model_info()
+            }
 
         except Exception as e:
             return {
@@ -118,6 +124,7 @@ class ModelAPI:
                 'error': f"Error during analysis: {str(e)}",
                 'model_info': f"{Config.ACTIVE_MODEL.value}"
             }
+
         
     def get_model_info(self) -> dict:
         """Получение информации о текущей модели"""

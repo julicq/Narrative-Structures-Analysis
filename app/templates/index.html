@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ locale }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Analyze narrative structure of your scripts and stories">
-    <meta name="keywords" content="narrative analysis, story structure, script analysis">
+    <meta name="description" content="{% if locale == 'ru' %}Анализ нарративной структуры ваших сценариев и историй{% else %}Analyze narrative structure of your scripts and stories{% endif %}">
+    <meta name="keywords" content="{% if locale == 'ru' %}анализ нарратива, структура истории, анализ сценария{% else %}narrative analysis, story structure, script analysis{% endif %}">
     <meta name="author" content="Your Company Name">
-    <title>Narrative Structure Analyzer</title>
+    <title>{% if locale == 'ru' %}Анализатор нарративной структуры{% else %}Narrative Structure Analyzer{% endif %}</title>
     
     <!-- jQuery from CDN with SRI hash -->
     <script 
@@ -232,26 +232,29 @@
     </style>
 </head>
 <body>
-    <h1>Narrative Structure Analyzer</h1>
+    <h1>{% if locale == 'ru' %}Анализ нарративной структуры{% else %}Narrative Structure Analysis{% endif %}</h1>
     
     <form id="analyzeForm" enctype="multipart/form-data" role="form">
-        <!-- CSRF Token - исправленная версия -->
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         
         <div class="form-group">
-            <label for="text">Script Text</label>
+            <label for="text">
+                {% if locale == 'ru' %}Текст сценария{% else %}Script Text{% endif %}
+            </label>
             <textarea 
                 id="text"
                 name="text" 
-                placeholder="Paste your script here..."
-                aria-label="Script text input"
+                placeholder="{% if locale == 'ru' %}Вставьте ваш сценарий сюда...{% else %}Paste your script here...{% endif %}"
+                aria-label="{% if locale == 'ru' %}Ввод текста сценария{% else %}Script text input{% endif %}"
                 maxlength="50000"
             ></textarea>
         </div>
         
         <div class="form-group file-input-wrapper">
             <label for="file">
-                <span class="file-label">Upload File (Max 5MB)</span>
+                <span class="file-label">
+                    {% if locale == 'ru' %}Загрузить файл (макс. 5МБ){% else %}Upload File (Max 5MB){% endif %}
+                </span>
                 <span class="file-name"></span>
             </label>
             <input 
@@ -259,19 +262,21 @@
                 type="file" 
                 name="file" 
                 accept=".txt,.pdf,.doc,.docx"
-                aria-label="File upload"
+                aria-label="{% if locale == 'ru' %}Загрузка файла{% else %}File upload{% endif %}"
                 data-max-size="5242880"
             >
         </div>
         
         <div class="form-group">
-            <label for="structure">Structure Type</label>
+            <label for="structure">
+                {% if locale == 'ru' %}Тип структуры{% else %}Structure Type{% endif %}
+            </label>
             <select 
                 id="structure"
                 name="structure"
-                aria-label="Select structure type"
+                aria-label="{% if locale == 'ru' %}Выбор типа структуры{% else %}Select structure type{% endif %}"
             >
-                <option value="">Auto-detect</option>
+                <option value="">{% if locale == 'ru' %}Автоопределение{% else %}Auto-detect{% endif %}</option>
                 {% for structure in structures %}
                 <option value="{{ structure }}">{{ structure }}</option>
                 {% endfor %}
@@ -280,21 +285,23 @@
         
         <button 
             type="submit"
-            aria-label="Analyze script"
-        >Analyze</button>
+            aria-label="{% if locale == 'ru' %}Анализировать сценарий{% else %}Analyze script{% endif %}"
+        >
+            {% if locale == 'ru' %}Анализировать{% else %}Analyze{% endif %}
+        </button>
     </form>
 
     <div id="result" role="region" aria-live="polite">
         <div id="structure" class="section">
-            <h2>Structure</h2>
+            <h2>{% if locale == 'ru' %}Структура{% else %}Structure{% endif %}</h2>
             <p></p>
         </div>
         <div id="analysis" class="section">
-            <h2>Analysis</h2>
+            <h2>{% if locale == 'ru' %}Анализ{% else %}Analysis{% endif %}</h2>
             <p></p>
         </div>
         <div id="visualization" class="section">
-            <h2>Visualization</h2>
+            <h2>{% if locale == 'ru' %}Визуализация{% else %}Visualization{% endif %}</h2>
         </div>
     </div>
 
@@ -304,20 +311,18 @@
             const result = $('#result');
             const fileInput = $('input[type="file"]');
             const maxFileSize = fileInput.data('max-size');
+            const locale = document.documentElement.lang;
             
-            // Получаем CSRF-токен
-            const csrfToken = $('input[name="csrf_token"]').val();
+            // Локализованные сообщения
+            const messages = {
+                fileSizeError: locale === 'ru' ? 'Размер файла превышает лимит в 5МБ' : 'File size exceeds 5MB limit',
+                noContentError: locale === 'ru' ? 'Пожалуйста, введите текст или загрузите файл' : 'Please provide either text or a file to analyze',
+                analyzing: locale === 'ru' ? 'Анализ...' : 'Analyzing...',
+                autoDetected: locale === 'ru' ? 'Автоопределено' : 'Auto-detected',
+                noVisualization: locale === 'ru' ? 'Визуализация недоступна для этой структуры.' : 'No visualization available for this structure.',
+                genericError: locale === 'ru' ? 'Произошла ошибка при анализе' : 'An error occurred during analysis'
+            };
             
-            // Настраиваем AJAX для работы с CSRF
-            $.ajaxSetup({
-                beforeSend: function(xhr, settings) {
-                    if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
-                        xhr.setRequestHeader("X-CSRFToken", csrfToken);
-                    }
-                }
-            });
-            
-            // File input handler
             fileInput.change(function() {
                 const file = this.files[0];
                 const fileName = file ? file.name : '';
@@ -325,7 +330,7 @@
                 
                 if (fileName) {
                     if (file.size > maxFileSize) {
-                        showError('File size exceeds 5MB limit');
+                        showError(messages.fileSizeError);
                         this.value = '';
                         fileLabel.text('');
                         return;
@@ -338,21 +343,17 @@
                 }
             });
 
-            // Form submission
             form.submit(function(e) {
                 e.preventDefault();
                 const formData = new FormData(this);
 
-                // Добавляем CSRF-токен в FormData
-                formData.append('csrf_token', csrfToken);
-
                 if (!formData.get('text') && !formData.get('file').size) {
-                    showError('Please provide either text or a file to analyze');
+                    showError(messages.noContentError);
                     return;
                 }
 
                 form.addClass('loading');
-                result.find('.section p').html('Analyzing...');
+                result.find('.section p').html(messages.analyzing);
                 result.addClass('visible');
 
                 $.ajax({
@@ -364,7 +365,7 @@
                     success: function(response) {
                         form.removeClass('loading');
                         
-                        $('#structure p').text(response.structure || 'Auto-detected');
+                        $('#structure p').text(response.structure || messages.autoDetected);
                         
                         $('#analysis p').html(
                             response.analysis
@@ -374,12 +375,13 @@
                         
                         if (response.visualization) {
                             $('#visualization').html(
-                                '<h2>Visualization</h2>' + response.visualization
+                                `<h2>${locale === 'ru' ? 'Визуализация' : 'Visualization'}</h2>` + 
+                                response.visualization
                             );
                         } else {
                             $('#visualization').html(
-                                '<h2>Visualization</h2>' +
-                                '<p>No visualization available for this structure.</p>'
+                                `<h2>${locale === 'ru' ? 'Визуализация' : 'Visualization'}</h2>` +
+                                `<p>${messages.noVisualization}</p>`
                             );
                         }
 
@@ -390,7 +392,7 @@
                     },
                     error: function(xhr) {
                         form.removeClass('loading');
-                        showError(xhr.responseJSON?.error || 'An error occurred during analysis');
+                        showError(xhr.responseJSON?.error || messages.genericError);
                     }
                 });
             });
@@ -416,7 +418,5 @@
                     block: 'start'
                 });
             }
-        });
-    </script>
-</body>
-</html>
+        })
+        
