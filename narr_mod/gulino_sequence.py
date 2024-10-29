@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from typing import List, Tuple, Final, ClassVar
-from narr_mod import NarrativeStructure
+from narr_mod import NarrativeStructure, StructureType, AnalysisResult, AnalysisMetadata
 
 @dataclass
 class SequenceElement:
@@ -20,6 +20,11 @@ class Act:
 
 class GulinoSequence(NarrativeStructure):
     """Implementation of Paul Gulino's Sequence Approach narrative structure."""
+
+    # Добавляем реализацию абстрактного метода structure_type
+    @property
+    def structure_type(self) -> StructureType:
+        return StructureType.GULINO_SEQUENCE
 
     # Константы для актов
     ACT_BEGINNING: Final[str] = "Beginning"
@@ -116,41 +121,76 @@ class GulinoSequence(NarrativeStructure):
     }
     """
 
-    def name(self) -> str:
-        return "Consistent Approach (Paul Gulino)"
-
-    def analyze(self, formatted_structure: dict) -> dict:
+    def analyze(self, text: str) -> AnalysisResult:
         """
         Analyze the narrative structure according to Gulino's Sequence Approach.
         
         Args:
-            formatted_structure: Dictionary containing the narrative structure
+            text: Input text to analyze
             
         Returns:
-            dict: Analysis results with sequence elements evaluation
+            AnalysisResult: Analysis results with sequence elements evaluation
         """
-        analysis = {
+        structure = {
             "acts": {
                 self.ACT_BEGINNING: [],
                 self.ACT_MIDDLE: [],
                 self.ACT_END: []
             },
             "elements": {element.name: {
-                "presence": self._evaluate_element_presence(element, formatted_structure),
+                "presence": self._evaluate_element_presence(element, text),
                 "description": element.description
             } for element in self.SEQUENCE_ELEMENTS},
-            "overall_evaluation": self._evaluate_overall_structure(formatted_structure)
+            "overall_evaluation": self._evaluate_overall_structure(text)
         }
         
-        return {**formatted_structure, "analysis": analysis}
+        # Создаем метаданные
+        metadata = AnalysisMetadata(
+            model_name="gpt-4",
+            model_version="1.0",
+            confidence=0.85,
+            processing_time=1.0,
+            structure_type=self.structure_type,
+            display_name=self.display_name
+        )
+        
+        # Создаем краткое описание анализа
+        summary = "Analysis of narrative structure using Gulino's Sequence Approach"
+        
+        # Создаем визуализацию
+        visualization = self.visualize(structure)
+        
+        return AnalysisResult(
+            structure=structure,
+            summary=summary,
+            visualization=visualization,
+            metadata=metadata
+        )
 
-    def _evaluate_element_presence(self, element: SequenceElement, structure: dict) -> bool:
-        """Evaluate presence of sequence element in the structure."""
-        # Здесь можно добавить более сложную логику оценки
+    def _evaluate_element_presence(self, element: SequenceElement, text: str) -> bool:
+        """
+        Evaluate presence of sequence element in the text.
+        
+        Args:
+            element: Sequence element to evaluate
+            text: Input text to analyze
+            
+        Returns:
+            bool: True if element is present
+        """
+        # Здесь должна быть реальная логика оценки наличия элемента в тексте
         return True
 
-    def _evaluate_overall_structure(self, structure: dict) -> dict:
-        """Evaluate overall narrative structure."""
+    def _evaluate_overall_structure(self, text: str) -> dict:
+        """
+        Evaluate overall narrative structure.
+        
+        Args:
+            text: Input text to analyze
+            
+        Returns:
+            dict: Evaluation results
+        """
         return {
             "balance": "Balanced structure",
             "pacing": "Good pacing",

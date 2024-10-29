@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from typing import List, Dict, Final, ClassVar
-from narr_mod import NarrativeStructure
+from narr_mod import NarrativeStructure, StructureType, AnalysisResult, AnalysisMetadata
 
 @dataclass
 class StoryElement:
@@ -23,6 +23,11 @@ class Act:
 
 class SothStoryStructure(NarrativeStructure):
     """Implementation of Chris Soth's Mini-Movie Method story structure."""
+
+    # Добавляем реализацию абстрактного метода structure_type
+    @property
+    def structure_type(self) -> StructureType:
+        return StructureType.SOTH_STRUCTURE
 
     # Константы для актов
     ACT_BEGINNING: Final[str] = "Beginning"
@@ -155,44 +160,81 @@ class SothStoryStructure(NarrativeStructure):
         }
     """
 
-    def name(self) -> str:
-        return "The Structure of Story (Chris Soth)"
-
-    def analyze(self, formatted_structure: dict) -> dict:
+    def analyze(self, text: str) -> AnalysisResult:
         """
         Analyze the narrative structure according to Soth's Mini-Movie Method.
         
         Args:
-            formatted_structure: Dictionary containing the narrative structure
+            text: Input text to analyze
             
         Returns:
-            dict: Analysis results with element evaluation
+            AnalysisResult: Analysis results with element evaluation
         """
-        analysis = {
+        # Анализируем структуру
+        structure = {
             "elements": {
-                element.name: self._analyze_element(element, formatted_structure)
+                element.name: self._analyze_element(element, text)
                 for element in self.STORY_ELEMENTS
             },
             "acts": {
-                act.name: self._analyze_act(act, formatted_structure)
+                act.name: self._analyze_act(act, text)
                 for act in self.ACTS
             },
-            "overall_evaluation": self._evaluate_overall_structure(formatted_structure)
+            "overall_evaluation": self._evaluate_overall_structure(text)
         }
         
-        return {**formatted_structure, "analysis": analysis}
+        # Создаем метаданные
+        metadata = AnalysisMetadata(
+            model_name="gpt-4",
+            model_version="1.0",
+            confidence=0.85,
+            processing_time=1.0,
+            structure_type=self.structure_type,
+            display_name=self.display_name
+        )
+        
+        # Создаем краткое описание анализа
+        summary = "Analysis of narrative structure using Soth's Mini-Movie Method"
+        
+        # Создаем визуализацию
+        visualization = self.visualize(structure)
+        
+        return AnalysisResult(
+            structure=structure,
+            summary=summary,
+            visualization=visualization,
+            metadata=metadata
+        )
 
-    def _analyze_element(self, element: StoryElement, structure: dict) -> dict:
-        """Analyze a single element of the story structure."""
+    def _analyze_element(self, element: StoryElement, text: str) -> dict:
+        """
+        Analyze a single element of the story structure.
+        
+        Args:
+            element: Story element to analyze
+            text: Input text to analyze
+            
+        Returns:
+            dict: Analysis results for the element
+        """
         return {
-            "presence": True,  # Placeholder for actual analysis
+            "presence": True,  # В реальной реализации здесь должен быть анализ текста
             "strength": "medium",
             "analysis_points": element.analysis_points,
             "suggestions": []
         }
 
-    def _analyze_act(self, act: Act, structure: dict) -> dict:
-        """Analyze an entire act of the story."""
+    def _analyze_act(self, act: Act, text: str) -> dict:
+        """
+        Analyze an entire act of the story.
+        
+        Args:
+            act: Act to analyze
+            text: Input text to analyze
+            
+        Returns:
+            dict: Analysis results for the act
+        """
         return {
             "balance": "well_balanced",
             "pacing": "good",
@@ -200,8 +242,16 @@ class SothStoryStructure(NarrativeStructure):
             "suggestions": []
         }
 
-    def _evaluate_overall_structure(self, structure: dict) -> dict:
-        """Evaluate the overall story structure."""
+    def _evaluate_overall_structure(self, text: str) -> dict:
+        """
+        Evaluate the overall story structure.
+        
+        Args:
+            text: Input text to analyze
+            
+        Returns:
+            dict: Overall evaluation results
+        """
         return {
             "structure_adherence": "strong",
             "pacing": "balanced",
@@ -256,3 +306,12 @@ class SothStoryStructure(NarrativeStructure):
         ]
 
         current_act = None
+        for element in self.STORY_ELEMENTS:
+            if element.act != current_act:
+                current_act = element.act
+                prompt_parts.append(f"\nAct - {current_act}:")
+            
+            prompt_parts.append(f"{element.number}. {element.name} ({element.description})")
+            prompt_parts.append("   Analysis points: " + ", ".join(element.analysis_points))
+
+        return "\n".join(prompt_parts)

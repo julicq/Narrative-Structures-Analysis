@@ -3,7 +3,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Final, ClassVar
-from narr_mod import NarrativeStructure
+from narr_mod import NarrativeStructure, StructureType, AnalysisResult, AnalysisMetadata
 
 @dataclass
 class Act:
@@ -14,6 +14,11 @@ class Act:
 
 class FourAct(NarrativeStructure):
     """Implementation of Four-Act Structure narrative analysis."""
+
+    # Добавляем реализацию абстрактного метода structure_type
+    @property
+    def structure_type(self) -> StructureType:
+        return StructureType.FOUR_ACT
 
     # Константы для актов
     ACT_SETUP: Final[str] = "Setup"
@@ -90,30 +95,48 @@ class FourAct(NarrativeStructure):
     }
     """
 
-    def name(self) -> str:
-        return "Four-Act Structure"
-
-    def analyze(self, formatted_structure: dict) -> dict:
+    def analyze(self, text: str) -> AnalysisResult:
         """
         Analyze the narrative structure using the Four-Act model.
         
         Args:
-            formatted_structure: Dictionary containing the narrative structure
+            text: Input text to analyze
             
         Returns:
-            dict: Complete analysis results
+            AnalysisResult: Complete analysis results
         """
-        initial_analysis = self._perform_initial_analysis(formatted_structure)
-        double_check_result = self._double_check_analysis(formatted_structure, initial_analysis)
+        # Выполняем начальный анализ
+        initial_analysis = self._perform_initial_analysis(text)
+        double_check_result = self._double_check_analysis(text, initial_analysis)
         
-        return {
-            **initial_analysis,
+        # Формируем структуру результата
+        structure = {
+            "acts": initial_analysis,
             "double_check": double_check_result,
-            "meta": {
-                "structure_type": self.name(),
-                "analysis_version": "1.0"
-            }
         }
+        
+        # Создаем метаданные
+        metadata = AnalysisMetadata(
+            model_name="gpt-4",
+            model_version="1.0",
+            confidence=0.85,
+            processing_time=1.0,
+            structure_type=self.structure_type,
+            display_name=self.display_name
+        )
+
+        # Создаем краткое описание анализа
+        summary = "Analysis of narrative structure using Four-Act Structure"
+        
+        # Создаем визуализацию
+        visualization = self.visualize(structure)
+        
+        return AnalysisResult(
+            structure=structure,
+            summary=summary,
+            visualization=visualization,
+            metadata=metadata
+        )
 
     def _analyze_act(self, act: Act, content: str) -> dict:
         """
@@ -145,19 +168,16 @@ class FourAct(NarrativeStructure):
 
         return analysis
 
-    def _perform_initial_analysis(self, formatted_structure: dict) -> dict:
+    def _perform_initial_analysis(self, text: str) -> dict:
         """Perform initial analysis of the structure."""
+        # В реальной реализации здесь должен быть анализ текста по актам
         return {
-            act_key: self._analyze_act(
-                act_data,
-                formatted_structure.get(act_data.name, "")
-            )
+            act_key: self._analyze_act(act_data, text)
             for act_key, act_data in self.ACTS.items()
         }
 
-    def _double_check_analysis(self, formatted_structure: dict, initial_analysis: dict) -> dict:
+    def _double_check_analysis(self, text: str, initial_analysis: dict) -> dict:
         """Perform secondary analysis for verification."""
-        # Здесь можно добавить реальную интеграцию с LLM
         return {
             "verification_status": "completed",
             "additional_insights": [],

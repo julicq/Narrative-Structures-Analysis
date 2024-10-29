@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from typing import Final, ClassVar, List, Tuple
 from narr_mod import NarrativeStructure
+from narr_mod import NarrativeStructure, StructureType, AnalysisResult, AnalysisMetadata
 
 @dataclass
 class ParadigmElement:
@@ -13,6 +14,11 @@ class ParadigmElement:
 
 class FieldParadigm(NarrativeStructure):
     """Implementation of Syd Field's Paradigm narrative structure."""
+
+    # Добавляем реализацию абстрактного метода structure_type
+    @property
+    def structure_type(self) -> StructureType:
+        return StructureType.FIELD_PARADIGM
 
     # Константы для актов
     ACT_SETUP: Final[str] = "Setup"
@@ -102,20 +108,17 @@ class FieldParadigm(NarrativeStructure):
     }
     """
 
-    def name(self) -> str:
-        return "Paradigm (Sid Field)"
-
-    def analyze(self, formatted_structure: dict) -> dict:
+    def analyze(self, text: str) -> AnalysisResult:
         """
         Analyze the narrative structure according to Field's Paradigm.
         
         Args:
-            formatted_structure: Dictionary containing the narrative structure
+            text: Input text to analyze
             
         Returns:
-            dict: Analysis results with elements and acts evaluation
+            AnalysisResult: Analysis results
         """
-        analysis = {
+        structure = {
             "acts": {
                 self.ACT_SETUP: {},
                 self.ACT_CONFRONTATION: {},
@@ -125,7 +128,29 @@ class FieldParadigm(NarrativeStructure):
             "overall_evaluation": {}
         }
         
-        return {**formatted_structure, "analysis": analysis}
+        # Создаем метаданные
+        metadata = AnalysisMetadata(
+            model_name="gpt-4",  # или другая используемая модель
+            model_version="1.0",
+            confidence=0.85,
+            processing_time=1.0,
+            structure_type=self.structure_type,
+            display_name=self.display_name
+        )
+        
+        # Создаем краткое описание анализа
+        summary = "Analysis of narrative structure using Syd Field's Paradigm"
+        
+        # Создаем визуализацию
+        visualization = self.visualize(structure)
+        
+        # Возвращаем результат в правильном формате
+        return AnalysisResult(
+            structure=structure,
+            summary=summary,
+            visualization=visualization,
+            metadata=metadata
+        )
 
     def get_prompt(self) -> str:
         """Generate the analysis prompt for the Field's Paradigm."""

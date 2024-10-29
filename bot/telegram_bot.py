@@ -1,24 +1,28 @@
 # bot/telegram_bot.py
 
-import asyncio
 import os
+from typing import Dict, Any
 from dotenv import load_dotenv
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram import ReplyKeyboardMarkup, KeyboardButton
+from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
-    ContextTypes,
     CommandHandler,
     MessageHandler,
     filters,
     CallbackQueryHandler,
+    ContextTypes
 )
 from narr_mod import StructureType
 from service.evaluator import NarrativeEvaluator
 from service import initialize_llm
-from app.routes import extract_doc_text, extract_text_from_pdf
 from shared.config import Config
+import tempfile
+from pathlib import Path
+from app.file_handlers.doc_handler import extract_text as extract_doc_text
+from app.file_handlers.pdf_handler import extract_text_from_pdf
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -35,16 +39,20 @@ class TelegramBot:
         self.application = None
         self._initialized = False
         self._running = False
-        self._stop_event = asyncio.Event()
         self.evaluator = None
+        self.user_states: Dict[int, Dict[str, Any]] = {}
 
-    async def setup(self):
+    def setup(self):
+        """Синхронная инициализация бота"""
         if self._initialized:
             return
             
+        logger.info("Setting up Telegram bot...")
+        
         # Инициализация LLM и evaluator
         llm = initialize_llm()
         if not llm:
+            logger.error("Failed to initialize LLM")
             raise ValueError("Failed to initialize LLM")
         
         self.evaluator = NarrativeEvaluator(llm)
@@ -52,10 +60,8 @@ class TelegramBot:
         
         # Регистрируем обработчики
         self.register_handlers()
-        
-        # Только инициализируем приложение
-        await self.application.initialize()
         self._initialized = True
+        logger.info("Telegram bot setup completed")
 
     def register_handlers(self):
         """Регистрация обработчиков команд"""
@@ -74,64 +80,33 @@ class TelegramBot:
         # Обработчик документов (файлов)
         self.application.add_handler(MessageHandler(
             filters.Document.ALL, 
-            self.analyze_file
+            self.handle_document
         ))
         
         # Обработчик ошибок
         self.application.add_error_handler(self.error_handler)
 
+    def run(self):
+        """Синхронный метод запуска бота"""
+        if not self._initialized:
+            self.setup()
+        
+        logger.info("Starting bot...")
+        self.application.run_polling(allowed_updates=Update.ALL_TYPES)
+
     async def start_polling(self):
+        """Запуск бота"""
         if not self._initialized:
             await self.setup()
-            
-        if not self.application:
-            raise RuntimeError("Application not initialized")
-        
-        if self._running:
-            return
-            
+                
+        logger.info("Starting bot polling...")
         self._running = True
         
-        try:
-            # Запускаем polling в отдельной задаче
-            polling_task = asyncio.create_task(self._run_polling())
-            await self._stop_event.wait()  # Ждем сигнал остановки
-            
-            # Останавливаем polling
-            await self.stop()
-            await polling_task
-            
-        except asyncio.CancelledError:
-            logger.info("Bot polling cancelled")
-            await self.stop()
-            raise
-        finally:
-            self._running = False
-
-    async def _run_polling(self):
-        """Внутренний метод для запуска polling"""
-        try:
-            await self.application.start()
-            while not self._stop_event.is_set():
-                await asyncio.sleep(1)  # Небольшая задержка для снижения нагрузки
-        finally:
-            await self.application.stop()
-
-    async def stop(self):
-        """Остановка бота"""
-        if not self._running:
-            return
-            
-        self._stop_event.set()
-        if self.application:
-            try:
-                await self.application.stop()
-                self.application = None
-                self._initialized = False
-                self._running = False
-            except Exception as e:
-                logger.error(f"Error stopping application: {e}")
-                raise
+        # Больше не нужно вызывать initialize() и start() отдельно
+        await self.application.run_polling(
+            allowed_updates=Update.ALL_TYPES,
+            close_loop=False  # Важный параметр!
+    )
 
     def get_main_keyboard(self):
         """Создание основной клавиатуры"""
@@ -143,7 +118,13 @@ class TelegramBot:
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /start"""
+        if not update.effective_user:
+            return
+                
         user = update.effective_user
+        chat_id = update.effective_chat.id
+        logger.info(f"Start command received from user {user.id} in chat {chat_id}")
+        
         keyboard = self.get_main_keyboard()
         await update.message.reply_text(
             f"Привет, {user.first_name}! 👋\n"
@@ -161,21 +142,29 @@ class TelegramBot:
             "   /start - начать работу\n"
             "   /help - показать эту справку\n\n"
             "📄 *Поддерживаемые форматы файлов:*\n"
-            "• TXT - текстовые файлы\n"
-            "• DOC/DOCX - документы Word\n"
-            "• PDF - PDF документы\n\n"
+            "• TXT - текстовые файлы\n\n"
             "Вы также можете:\n"
             "• Выбрать конкретную структуру для анализа\n"
             "• Использовать автоопределение структуры"
         )
-        await update.message.reply_text(help_text, parse_mode='Markdown')
+        await update.message.reply_text(
+            help_text,
+            parse_mode=ParseMode.MARKDOWN
+        )
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик текстовых сообщений"""
+        if not update.message or not update.message.text:
+            return
+
         text = update.message.text
+        chat_id = update.effective_chat.id
+        
+        logger.info(f"Received message from {chat_id}: {text}")
         
         # Обработка кнопок меню
         if text in ["Выбрать структуру", "Помощь", "Автоопределение структуры"]:
+            logger.info(f"Processing menu button: {text}")
             await self.handle_button(update, context)
             return
 
@@ -186,17 +175,25 @@ class TelegramBot:
             )
             
             structure = context.user_data.get('selected_structure', "Auto-detect")
+            logger.info(f"Processing text with structure: {structure}")
+            
             await self.process_text(update, context, text, structure)
             await processing_message.delete()
                 
         except Exception as e:
             error_message = f"❌ Произошла ошибка при обработке сообщения: {str(e)}"
+            logger.error(f"Error in handle_message: {e}", exc_info=True)
             await update.message.reply_text(error_message)
-            logger.error(f"Error in handle_message: {e}")
 
     async def handle_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик нажатий на текстовые кнопки"""
+        if not update.message:
+            return
+            
         text = update.message.text
+        chat_id = update.effective_chat.id
+        logger.info(f"Processing button press from {chat_id}: {text}")
+        
         if text == "Выбрать структуру":
             await self.choose_structure(update, context)
         elif text == "Помощь":
@@ -204,7 +201,7 @@ class TelegramBot:
         elif text == "Автоопределение структуры":
             context.user_data['selected_structure'] = "Auto-detect"
             await update.message.reply_text(
-                "Выбрано автоопределение структуры.\n"
+                "✅ Выбрано автоопределение структуры.\n"
                 "Отправьте текст или файл для анализа."
             )
 
@@ -219,92 +216,180 @@ class TelegramBot:
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
-            'Выберите тип нарративной структуры:',
+            '🔍 Выберите тип нарративной структуры:',
             reply_markup=reply_markup
         )
 
     async def button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик inline кнопок"""
         query = update.callback_query
-        await query.answer()
-        context.user_data['selected_structure'] = query.data
-        await query.edit_message_text(text=f"Выбрана структура: {query.data}")
+        if not query:
+            return
 
-    async def analyze_file(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        logger.info(f"Received callback query: {query.data}")
+        
+        try:
+            await query.answer()
+            chat_id = update.effective_chat.id
+            
+            # Сохраняем выбранную структуру
+            context.user_data['selected_structure'] = query.data
+            
+            # Обновляем сообщение с подтверждением выбора
+            structure_name = StructureType.get_display_name(query.data)
+            await query.edit_message_text(
+                f"✅ Выбрана структура: {structure_name}\n\n"
+                "Теперь отправьте текст или файл для анализа."
+            )
+            
+            logger.info(f"Structure selected for chat {chat_id}: {query.data}")
+            
+        except Exception as e:
+            logger.error(f"Error in button handler: {e}", exc_info=True)
+            await query.edit_message_text(
+                "❌ Произошла ошибка при выборе структуры. Попробуйте еще раз."
+            )
+
+    async def handle_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик файлов"""
+        if not update.message or not update.message.document:
+            return
+            
         try:
             file = await update.message.document.get_file()
             file_name = update.message.document.file_name
-            file_extension = os.path.splitext(file_name)[1].lower()
+            file_extension = Path(file_name).suffix.lower()
+            
+            logger.info(f"Processing file: {file_name}")
 
-            if file_extension not in ['.doc', '.docx', '.pdf', '.txt']:
+            # Проверяем поддерживаемые форматы
+            supported_extensions = {'.txt', '.doc', '.docx', '.pdf'}
+            if file_extension not in supported_extensions:
                 await update.message.reply_text(
-                    "Неподдерживаемый тип файла. Пожалуйста, отправьте doc, docx, pdf или txt файл."
+                    "❌ Поддерживаются только следующие форматы:\n"
+                    "• TXT - текстовые файлы\n"
+                    "• DOC/DOCX - документы Word\n"
+                    "• PDF - документы PDF"
                 )
                 return
 
-            processing_message = await update.message.reply_text(f"Обрабатываю файл {file_name}...")
-            
-            try:
-                await file.download_to_drive(file_name)
-                
-                if file_extension in ['.doc', '.docx']:
-                    text = extract_doc_text(file_name)
-                elif file_extension == '.pdf':
-                    with open(file_name, 'rb') as f:
-                        text = extract_text_from_pdf(f)
-                else:  # .txt
-                    with open(file_name, 'r', encoding='utf-8') as f:
-                        text = f.read()
-                        
-            finally:
-                if os.path.exists(file_name):
-                    os.remove(file_name)
+            processing_message = await update.message.reply_text(
+                f"🔄 Обрабатываю файл {file_name}..."
+            )
 
-            if not text:
-                await processing_message.edit_text("Не удалось извлечь текст из файла.")
+            # Создаем временную директорию для работы с файлом
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_file = Path(temp_dir) / file_name
+                await file.download_to_drive(str(temp_file))
+                
+                text = None
+                
+                try:
+                    # Извлекаем текст в зависимости от формата файла
+                    if file_extension == '.txt':
+                        with open(temp_file, 'r', encoding='utf-8') as f:
+                            text = f.read()
+                            
+                    elif file_extension in ['.doc', '.docx']:
+                        text = extract_doc_text(temp_file)
+                            
+                    elif file_extension == '.pdf':
+                        text = extract_text_from_pdf(temp_file)
+
+                except FileNotFoundError:
+                    await processing_message.edit_text(
+                        "❌ Ошибка: файл не найден или недоступен."
+                    )
+                    return
+                except ValueError as e:
+                    await processing_message.edit_text(
+                        f"❌ Ошибка: {str(e)}"
+                    )
+                    return
+                except Exception as e:
+                    logger.error(f"Error processing file {file_name}: {str(e)}")
+                    await processing_message.edit_text(
+                        "❌ Ошибка при обработке файла. "
+                        "Возможно, файл поврежден или имеет неподдерживаемый формат."
+                    )
+                    return
+
+            if not text or not text.strip():
+                await processing_message.edit_text(
+                    "❌ Не удалось извлечь текст из файла. "
+                    "Возможно, файл пуст или содержит только изображения."
+                )
                 return
+
+            # Проверка длины текста и предупреждение пользователя
+            if len(text) > 50000:  # примерное ограничение
+                await update.message.reply_text(
+                    "⚠️ Внимание: текст очень длинный. "
+                    "Анализ может занять продолжительное время."
+                )
 
             structure = context.user_data.get('selected_structure', "Auto-detect")
             await self.process_text(update, context, text, structure)
             await processing_message.delete()
             
         except Exception as e:
-            logger.error(f"Error in analyze_file: {e}")
+            logger.error(f"Error in handle_document: {e}", exc_info=True)
             await update.message.reply_text(
-                "Произошла ошибка при обработке файла. Пожалуйста, попробуйте позже."
+                "❌ Произошла ошибка при обработке файла. "
+                "Пожалуйста, убедитесь, что файл не поврежден и попробуйте снова."
             )
 
     async def process_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, structure: str):
         """Обработка текста и отправка результатов анализа"""
+        chat_id = update.effective_chat.id
+        logger.info(f"Processing text for chat {chat_id} with structure {structure}")
+        
         try:
             if structure == "Auto-detect":
+                logger.info("Using auto-detection for structure")
                 structure = self.evaluator.classify(text)
+                logger.info(f"Auto-detected structure: {structure}")
 
             result = self.evaluator.analyze_specific_structure(text, structure)
-
-            response = f"Анализ структуры: {result['structure']}\n\n"
-            response += f"Анализ:\n{result['analysis']}\n\n"
-            if 'visualization' in result:
-                response += f"Визуализация:\n{result['visualization']}"
-
-            # Разбиваем длинные сообщения на части
+            
+            # Формируем упрощенный ответ без визуализации
+            response_parts = []
+            
+            # Добавляем информацию о структуре
+            response_parts.append(f"📊 <b>Тип структуры:</b> {result['structure']}\n")
+            
+            # Добавляем основной анализ
+            if 'analysis' in result and result['analysis']:
+                analysis_text = result['analysis'].replace('*', '•')  # Заменяем markdown-символы
+                response_parts.append(f"<b>Анализ текста:</b>\n{analysis_text}")
+            
+            # Объединяем все части
+            response = '\n'.join(response_parts)
+            
+            # Разбиваем длинные сообщения на части если необходимо
             if len(response) > 4096:
                 for x in range(0, len(response), 4096):
-                    await update.message.reply_text(response[x:x+4096])
+                    await update.message.reply_text(
+                        response[x:x+4096],
+                        parse_mode=ParseMode.HTML
+                    )
             else:
-                await update.message.reply_text(response)
+                await update.message.reply_text(
+                    response,
+                    parse_mode=ParseMode.HTML
+                )
                 
         except Exception as e:
-            logger.error(f"Error in process_text: {e}")
+            logger.error(f"Error in process_text: {e}", exc_info=True)
             await update.message.reply_text(
-                "Произошла ошибка при анализе текста. Пожалуйста, попробуйте позже."
+                "❌ Произошла ошибка при анализе текста. Пожалуйста, попробуйте позже."
             )
 
     async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик ошибок"""
-        logger.error(f"Exception while handling an update: {context.error}")
-        if update and update.message:
-            await update.message.reply_text(
-                "Произошла ошибка при обработке запроса. Пожалуйста, попробуйте позже."
+        logger.error(f"Exception while handling an update: {context.error}", exc_info=True)
+        
+        if update and update.effective_message:
+            await update.effective_message.reply_text(
+                "❌ Произошла ошибка при обработке запроса. Пожалуйста, попробуйте позже."
             )

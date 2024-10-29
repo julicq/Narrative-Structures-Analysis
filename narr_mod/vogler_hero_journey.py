@@ -1,9 +1,10 @@
 # narr_mod/vogler_hero_journey.py
 
 from dataclasses import dataclass
+import math
 from typing import List, Dict, Optional, Final, ClassVar
 from enum import Enum
-from narr_mod import NarrativeStructure
+from narr_mod import NarrativeStructure, StructureType, AnalysisResult, AnalysisMetadata
 
 class WorldType(Enum):
     ORDINARY = "Ordinary World"
@@ -33,8 +34,19 @@ class Stage:
     angle: int  # угол на круговой диаграмме
     color: str
 
+@dataclass
+class StageAnalysis:
+    elements_present: Dict[str, bool]
+    strengths: List[str]
+    weaknesses: List[str]
+    score: float
+
 class VoglerHeroJourney(NarrativeStructure):
     """Implementation of Chris Vogler's Hero's Journey structure."""
+
+    @property
+    def structure_type(self) -> StructureType:
+        return StructureType.VOGLER_HERO_JOURNEY
 
     # Константы
     TOTAL_STAGES: Final[int] = 12
@@ -140,34 +152,72 @@ class VoglerHeroJourney(NarrativeStructure):
         }
     """
 
-    def name(self) -> str:
-        return "Hero's journey (Chris Vogler)"
-
-    def analyze(self, formatted_structure: dict) -> dict:
+    def analyze(self, text: str) -> AnalysisResult:
         """
         Analyze the narrative structure according to Vogler's Hero's Journey.
         
         Args:
-            formatted_structure: Dictionary containing the narrative structure
+            text: Input text to analyze
             
         Returns:
-            dict: Analysis results with detailed evaluation
+            AnalysisResult: Analysis results with detailed evaluation
         """
+
+        # Разбиваем текст на части по стадиям
+        formatted_structure = self._split_into_stages(text)
+        # Анализируем каждую стадию
         analysis = {
             "stages": {},
             "worlds": {
                 "ordinary": self._analyze_world(WorldType.ORDINARY, formatted_structure),
                 "special": self._analyze_world(WorldType.SPECIAL, formatted_structure)
-            },
-            "overall": self._analyze_overall_structure(formatted_structure)
+            }
         }
 
         for stage in self.STAGES:
             analysis["stages"][stage.name] = self._analyze_stage(stage, formatted_structure)
 
-        return analysis
+        # Добавляем общий анализ
+        analysis["overall"] = self._analyze_overall_structure(formatted_structure)
 
-    def _analyze_stage(self, stage: Stage, content: dict) -> dict:
+        # Создаем метаданные
+        metadata = AnalysisMetadata(
+            model_name="gpt-4",
+            model_version="1.0",
+            confidence=0.85,
+            processing_time=1.0,
+            structure_type=self.structure_type,
+            display_name=self.display_name
+        )
+
+        # Создаем краткое описание
+        summary = "Analysis of narrative using Vogler's Hero's Journey"
+
+        # Создаем визуализацию
+        visualization = self.visualize(analysis)
+
+        return AnalysisResult(
+            structure=analysis,
+            summary=summary,
+            visualization=visualization,
+            metadata=metadata
+        )
+    
+    def _split_into_stages(self, text: str) -> Dict[str, str]:
+        """Split the text into stages based on keywords and structure."""
+        stages_content = {}
+        total_length = len(text)
+        stage_length = total_length // self.TOTAL_STAGES
+        
+        for i, stage in enumerate(self.STAGES):
+            start = i * stage_length
+            end = (i + 1) * stage_length if i < self.TOTAL_STAGES - 1 else total_length
+            stage_key = stage.name.lower().replace(" ", "_")
+            stages_content[stage_key] = text[start:end]
+            
+        return stages_content
+
+    def _analyze_stage(self, stage: Stage, content: dict) -> StageAnalysis:
         """Analyze a single stage of the journey."""
         stage_content = content.get(stage.name.lower().replace(" ", "_"), "")
         
@@ -184,12 +234,12 @@ class VoglerHeroJourney(NarrativeStructure):
             else:
                 weaknesses.append(f"{element.name} needs more development")
 
-        return {
-            "elements_present": elements_present,
-            "strengths": strengths,
-            "weaknesses": weaknesses,
-            "score": sum(elements_present.values()) / len(stage.elements)
-        }
+        return StageAnalysis(
+            elements_present=elements_present,
+            strengths=strengths,
+            weaknesses=weaknesses,
+            score=sum(elements_present.values()) / len(stage.elements)
+        )
 
     def _analyze_world(self, world_type: WorldType, content: dict) -> dict:
         """Analyze the representation of a world type."""
@@ -204,12 +254,17 @@ class VoglerHeroJourney(NarrativeStructure):
         }
 
     def _analyze_transitions(self, world_type: WorldType, content: dict) -> dict:
-        """Analyze transitions between worlds."""
-        # Анализ переходов между мирами
         return {
-            "clarity": 0.8,  # placeholder
-            "impact": 0.7,   # placeholder
-            "smoothness": 0.9 # placeholder
+            "clarity": 0.8,
+            "impact": 0.7,
+            "smoothness": 0.9
+        }
+    
+    def _analyze_overall_structure(self, content: dict) -> dict:
+        return {
+            "completeness": sum(stage.score for stage in self._get_stage_analyses(content)) / len(self.STAGES),
+            "balance": self._analyze_world_balance(content),
+            "flow": self._analyze_narrative_flow(content)
         }
 
     def visualize(self, analysis_result: dict) -> str:
@@ -292,3 +347,15 @@ class VoglerHeroJourney(NarrativeStructure):
                 )
 
         return "\n".join(prompt_parts)
+    
+    def _get_stage_analyses(self, content: dict) -> List[StageAnalysis]:
+        return [self._analyze_stage(stage, content) for stage in self.STAGES]
+
+    def _analyze_world_balance(self, content: dict) -> float:
+        ordinary_world = self._analyze_world(WorldType.ORDINARY, content)
+        special_world = self._analyze_world(WorldType.SPECIAL, content)
+        return min(ordinary_world["strength"], special_world["strength"]) / max(ordinary_world["strength"], special_world["strength"])
+
+    def _analyze_narrative_flow(self, content: dict) -> float:
+        # Упрощенная метрика для оценки плавности повествования
+        return 0.85  # placeholder

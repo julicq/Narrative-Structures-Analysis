@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Final, ClassVar
 from enum import Enum
-from narr_mod import NarrativeStructure
+from narr_mod import NarrativeStructure, StructureType, AnalysisResult, AnalysisMetadata
 
 class ActType(Enum):
     SETUP = "Setup"
@@ -35,8 +35,21 @@ class AnalysisResult:
     score: float  # 0-1
     elements_present: Dict[str, bool]
 
+@dataclass
+class ActAnalysis:
+    strengths: List[str]
+    weaknesses: List[str]
+    suggestions: List[str]
+    score: float  # 0-1
+    elements_present: Dict[str, bool]
+
 class ThreeAct(NarrativeStructure):
     """Implementation of the Three-Act Structure narrative analysis."""
+
+    # Добавляем реализацию абстрактного метода structure_type
+    @property
+    def structure_type(self) -> StructureType:
+        return StructureType.THREE_ACT
 
     # Константы
     MIN_ACT_LENGTH: Final[int] = 1000  # минимальная длина акта в символах
@@ -189,31 +202,64 @@ class ThreeAct(NarrativeStructure):
         }
     """
 
-    def name(self) -> str:
-        return "Трехактная структура"
-
-    def analyze(self, formatted_structure: dict) -> dict:
+    def analyze(self, text: str) -> AnalysisResult:
         """
         Analyze the narrative structure according to the Three-Act Structure.
         
         Args:
-            formatted_structure: Dictionary containing the narrative structure
+            text: Input text to analyze
             
         Returns:
-            dict: Analysis results with detailed evaluation
+            AnalysisResult: Analysis results with detailed evaluation
         """
-        analysis = {}
+        # Разбиваем текст на акты (упрощенная версия)
+        acts_content = self._split_into_acts(text)
         
+        # Анализируем каждый акт
+        act_analyses = {}
         for act in self.ACTS:
-            act_content = formatted_structure.get(f"act{act.number}_{act.type.value.lower()}", "")
-            analysis[f"Act{act.number}"] = self._analyze_act(act, act_content)
+            act_content = acts_content.get(act.type, "")
+            act_analyses[f"Act{act.number}"] = self._analyze_act(act, act_content)
 
-        # Добавляем общий анализ
-        analysis["overall"] = self._analyze_overall_structure(formatted_structure, analysis)
-        
-        return analysis
+        # Формируем структуру результата
+        structure = {
+            "acts": act_analyses,
+            "overall": self._analyze_overall_structure(acts_content, act_analyses)
+        }
 
-    def _analyze_act(self, act: Act, content: str) -> AnalysisResult:
+        # Создаем метаданные
+        metadata = AnalysisMetadata(
+            model_name="gpt-4",
+            model_version="1.0",
+            confidence=0.85,
+            processing_time=1.0,
+            structure_type=self.structure_type,
+            display_name=self.display_name
+        )
+
+        # Создаем краткое описание
+        summary = "Analysis of narrative using Three-Act Structure"
+
+        # Создаем визуализацию
+        visualization = self.visualize(structure)
+
+        return AnalysisResult(
+            structure=structure,
+            summary=summary,
+            visualization=visualization,
+            metadata=metadata
+        )
+    
+    def _split_into_acts(self, text: str) -> Dict[ActType, str]:
+        """Split the text into three acts based on simple heuristics."""
+        total_length = len(text)
+        return {
+            ActType.SETUP: text[:int(total_length * 0.25)],
+            ActType.CONFRONTATION: text[int(total_length * 0.25):int(total_length * 0.75)],
+            ActType.RESOLUTION: text[int(total_length * 0.75):]
+        }
+
+    def _analyze_act(self, act: Act, content: str) -> ActAnalysis:
         """Analyze a single act of the structure."""
         elements_present = {}
         strengths = []
@@ -234,7 +280,7 @@ class ThreeAct(NarrativeStructure):
         # Рассчитываем общий счет
         score = sum(elements_present.values()) / len(act.elements)
 
-        return AnalysisResult(
+        return ActAnalysis(
             strengths=strengths,
             weaknesses=weaknesses,
             suggestions=suggestions,
@@ -242,13 +288,24 @@ class ThreeAct(NarrativeStructure):
             elements_present=elements_present
         )
 
-    def _analyze_overall_structure(self, structure: dict, act_analyses: Dict[str, AnalysisResult]) -> dict:
+
+    def _analyze_overall_structure(self, structure: dict, act_analyses: Dict[str, ActAnalysis]) -> dict:
         """Analyze the overall structure balance and effectiveness."""
         return {
             "balance": self._analyze_balance(structure),
             "effectiveness": self._analyze_effectiveness(act_analyses),
             "suggestions": self._generate_overall_suggestions(act_analyses)
         }
+    
+    def _analyze_effectiveness(self, act_analyses: Dict[str, ActAnalysis]) -> float:
+        return sum(analysis.score for analysis in act_analyses.values()) / len(act_analyses)
+
+    def _generate_overall_suggestions(self, act_analyses: Dict[str, ActAnalysis]) -> List[str]:
+        suggestions = []
+        for act_name, analysis in act_analyses.items():
+            if analysis.score < 0.7:
+                suggestions.extend(analysis.suggestions)
+        return suggestions
 
     def visualize(self, analysis_result: dict) -> str:
         """

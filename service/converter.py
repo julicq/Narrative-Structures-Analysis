@@ -15,6 +15,7 @@ class StoryStructure(Enum):
     SOTH_STORY_STRUCTURE = "soth_story_structure"
     VOGLER_HERO_JOURNEY = "vogler_hero_journey"
     WATTS_EIGHT_POINT_ARC = "watts_eight_point_arc"
+    MONOMYTH = "monomyth"
 
 @dataclass
 class StorySegment:
@@ -166,6 +167,31 @@ class StoryStructureConverter:
                 StorySegment("resolution", 0.1)
             ],
             "Nigel Watts' Eight-Point Arc structure"
+        ),
+
+        StoryStructure.MONOMYTH: StructureDefinition(
+        "Campbell's Monomyth",
+        [
+            StorySegment("ordinary_world", 0.06),
+            StorySegment("call_to_adventure", 0.06),
+            StorySegment("refusal_of_call", 0.06),
+            StorySegment("meeting_mentor", 0.06),
+            StorySegment("crossing_threshold", 0.06),
+            StorySegment("belly_of_whale", 0.06),
+            StorySegment("road_of_trials", 0.08),
+            StorySegment("goddess_meeting", 0.06),
+            StorySegment("woman_temptress", 0.06),
+            StorySegment("atonement_father", 0.06),
+            StorySegment("apotheosis", 0.08),
+            StorySegment("ultimate_boon", 0.06),
+            StorySegment("refusal_return", 0.06),
+            StorySegment("magic_flight", 0.06),
+            StorySegment("rescue_without", 0.06),
+            StorySegment("crossing_return", 0.06),
+            StorySegment("master_two_worlds", 0.06),
+            StorySegment("freedom_to_live", 0.06)
+        ],
+        "Joseph Campbell's complete Monomyth structure with seventeen stages of the hero's journey"
         ),
     }
 

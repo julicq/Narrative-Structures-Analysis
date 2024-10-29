@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Final, ClassVar
-from narr_mod import NarrativeStructure
+from narr_mod import NarrativeStructure, StructureType, AnalysisResult, AnalysisMetadata
 
 @dataclass
 class MonomythStage:
@@ -13,6 +13,11 @@ class MonomythStage:
 class CampbellMonomyth(NarrativeStructure):
     """Implementation of Joseph Campbell's Monomyth (Hero's Journey) structure."""
 
+    # Добавляем реализацию абстрактного метода structure_type
+    @property
+    def structure_type(self) -> StructureType:
+        return StructureType.MONOMYTH
+    
     # Константы для фаз
     SEPARATION: Final[str] = "Separation"
     INITIATION: Final[str] = "Initiation"
@@ -103,21 +108,18 @@ class CampbellMonomyth(NarrativeStructure):
     }
     """
 
-    def name(self) -> str:
-        return "The Monomyth (Joseph Campbell)"
-
-    def analyze(self, formatted_structure: dict) -> dict:
+    def analyze(self, text: str) -> AnalysisResult:
         """
         Analyze the narrative structure according to Campbell's Monomyth.
         
         Args:
-            formatted_structure: Dictionary containing the narrative structure
+            text: Input text to analyze
             
         Returns:
-            dict: Analysis results with phases and stages evaluation
+            AnalysisResult: Analysis results with phases and stages evaluation
         """
         # В будущем здесь можно добавить более сложную логику анализа
-        analysis = {
+        structure = {
             "phases": {
                 self.SEPARATION: [],
                 self.INITIATION: [],
@@ -127,7 +129,29 @@ class CampbellMonomyth(NarrativeStructure):
             "overall_evaluation": {}
         }
         
-        return {**formatted_structure, "analysis": analysis}
+        # Создаем метаданные
+        metadata = AnalysisMetadata(
+            model_name="gpt-4",
+            model_version="1.0",
+            confidence=0.85,
+            processing_time=1.0,
+            structure_type=self.structure_type,
+            display_name=self.display_name
+        )
+        
+        # Создаем краткое описание анализа
+        summary = "Analysis of narrative structure using Campbell's Monomyth"
+        
+        # Создаем визуализацию
+        visualization = self.visualize(structure)
+        
+        # Возвращаем результат в правильном формате
+        return AnalysisResult(
+            structure=structure,
+            summary=summary,
+            visualization=visualization,
+            metadata=metadata
+        )
 
     def get_prompt(self) -> str:
         """Generate the analysis prompt for the Monomyth structure."""

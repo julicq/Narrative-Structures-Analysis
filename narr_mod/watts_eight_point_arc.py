@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Final, ClassVar
 from enum import Enum
-from narr_mod import NarrativeStructure
+from narr_mod import NarrativeStructure, StructureType, AnalysisResult as BaseAnalysisResult, AnalysisMetadata
 
 class ArcPhase(Enum):
     BEGINNING = "Beginning"
@@ -22,7 +22,7 @@ class ArcPoint:
     expected_length: float  # процент от общей длины
 
 @dataclass
-class AnalysisResult:
+class PointAnalysis:
     strengths: List[str]
     weaknesses: List[str]
     suggestions: List[str]
@@ -31,6 +31,10 @@ class AnalysisResult:
 
 class WattsEightPointArc(NarrativeStructure):
     """Implementation of Nigel Watts' Eight-Point Arc structure."""
+
+    @property
+    def structure_type(self) -> StructureType:
+        return StructureType.WATTS_EIGHT_POINT
 
     # Константы
     MIN_POINT_LENGTH: Final[int] = 500  # минимальная длина точки в символах
@@ -188,19 +192,21 @@ class WattsEightPointArc(NarrativeStructure):
         }
     """
 
-    def name(self) -> str:
-        return "Eight Point Arc (Nigel Watts)"
-
-    def analyze(self, formatted_structure: dict) -> dict:
+    def analyze(self, text: str) -> BaseAnalysisResult:
         """
         Analyze the narrative structure according to Watts' Eight-Point Arc.
         
         Args:
-            formatted_structure: Dictionary containing the narrative structure
+            text: Input text to analyze
             
         Returns:
-            dict: Analysis results with detailed evaluation
+            BaseAnalysisResult: Analysis results with detailed evaluation
         """
+
+        # Разбиваем текст на части
+        formatted_structure = self._split_into_points(text)
+        
+        # Анализируем структуру
         analysis = {
             "points": {},
             "phases": {
@@ -213,9 +219,71 @@ class WattsEightPointArc(NarrativeStructure):
         for point in self.POINTS:
             analysis["points"][point.name] = self._analyze_point(point, formatted_structure)
 
-        return analysis
+        # Создаем метаданные
+        metadata = AnalysisMetadata(
+            model_name="gpt-4",
+            model_version="1.0",
+            confidence=0.85,
+            processing_time=1.0,
+            structure_type=self.structure_type,
+            display_name=self.display_name
+        )
 
-    def _analyze_point(self, point: ArcPoint, content: dict) -> AnalysisResult:
+        # Создаем краткое описание
+        summary = "Analysis of narrative using Watts' Eight-Point Arc"
+
+        # Создаем визуализацию
+        visualization = self.visualize(analysis)
+
+        return BaseAnalysisResult(
+            structure=analysis,
+            summary=summary,
+            visualization=visualization,
+            metadata=metadata
+        )
+    
+    def _split_into_points(self, text: str) -> Dict[str, str]:
+        """Split the text into points based on expected lengths."""
+        points_content = {}
+        
+        # Проверка на пустой текст
+        if not text:
+            return {point.name.lower().replace(" ", "_"): "" 
+                    for point in self.POINTS}
+        
+        total_length = len(text)
+        current_pos = 0
+        
+        for point in self.POINTS:
+            point_key = point.name.lower().replace(" ", "_")
+            
+            # Вычисляем длину для текущей точки
+            point_length = max(1, int(total_length * point.expected_length))
+            end_pos = min(current_pos + point_length, total_length)
+            
+            # Если мы достигли конца текста, оставшийся текст идет в текущую точку
+            if current_pos >= total_length:
+                points_content[point_key] = ""
+            else:
+                # Ищем ближайший конец предложения или абзаца
+                text_chunk = text[current_pos:end_pos]
+                
+                # Пытаемся найти естественную границу
+                sentence_end = text_chunk.rfind('. ')
+                paragraph_end = text_chunk.rfind('\n')
+                
+                # Используем наиболее подходящую границу
+                if sentence_end > 0:
+                    end_pos = current_pos + sentence_end + 1
+                elif paragraph_end > 0:
+                    end_pos = current_pos + paragraph_end + 1
+                    
+                points_content[point_key] = text[current_pos:end_pos].strip()
+                current_pos = end_pos
+                
+        return points_content
+
+    def _analyze_point(self, point: ArcPoint, content: dict) -> PointAnalysis:
         """Analyze a single point of the arc."""
         point_content = content.get(point.name.lower().replace(" ", "_"), "")
         
@@ -243,7 +311,7 @@ class WattsEightPointArc(NarrativeStructure):
 
         score = found_keywords / len(point.keywords)
 
-        return AnalysisResult(
+        return PointAnalysis(
             strengths=strengths,
             weaknesses=weaknesses,
             suggestions=suggestions,
@@ -327,6 +395,40 @@ class WattsEightPointArc(NarrativeStructure):
             f"<span class='keyword {('found' if found else '')}'>{keyword}</span>"
             for keyword, found in keywords_found.items()
         )
+    
+    def _calculate_balance_score(self, content: dict) -> float:
+        """Calculate the balance score for the overall structure."""
+        total_length = sum(len(content.get(p.name.lower().replace(" ", "_"), ""))
+                          for p in self.POINTS)
+        
+        if total_length == 0:
+            return 0.0
+            
+        deviations = []
+        for point in self.POINTS:
+            point_content = content.get(point.name.lower().replace(" ", "_"), "")
+            expected_length = total_length * point.expected_length
+            actual_length = len(point_content)
+            deviation = abs(actual_length - expected_length) / expected_length
+            deviations.append(deviation)
+            
+        return 1.0 - (sum(deviations) / len(deviations))
+
+    def _calculate_progression_score(self, content: dict) -> float:
+        """Calculate how well the narrative progresses through the points."""
+        scores = []
+        for i in range(len(self.POINTS) - 1):
+            current_point = self.POINTS[i]
+            next_point = self.POINTS[i + 1]
+            
+            current_content = content.get(current_point.name.lower().replace(" ", "_"), "")
+            next_content = content.get(next_point.name.lower().replace(" ", "_"), "")
+            
+            # Простая метрика: насколько хорошо точки связаны между собой
+            transition_score = 0.8  # placeholder
+            scores.append(transition_score)
+            
+        return sum(scores) / len(scores) if scores else 0.0
 
     def get_prompt(self) -> str:
         """Generate analysis prompt for the Eight-Point Arc."""
