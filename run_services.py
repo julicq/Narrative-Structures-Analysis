@@ -1,16 +1,18 @@
 # run_services.py
 
 import asyncio
+import logging
+import signal
+import threading
 from flask import Flask
-from telegram import Update
 from werkzeug.serving import make_server
 from bot.telegram_bot import TelegramBot
-from telegram.ext import Application, CommandHandler
 from app import create_app
 from shared.config import Config
-import logging
-import threading
-import signal
+import nest_asyncio
+
+# Применяем nest_asyncio для решения проблем с вложенными event loops
+nest_asyncio.apply()
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -43,76 +45,91 @@ class FlaskServer(threading.Thread):
 class ServiceManager:
     def __init__(self):
         self.flask_server = None
-        self.application = None
+        self.bot = None
+        self._stop_event = None
+
+    async def init_services(self):
         self._stop_event = asyncio.Event()
+        
+        # Инициализация Flask
+        logger.info("Starting Flask server...")
+        app = create_app()
+        self.flask_server = FlaskServer(app)
+        self.flask_server.start()
 
-    def setup_signal_handlers(self):
-        for sig in (signal.SIGTERM, signal.SIGINT):
-            signal.signal(sig, self._handle_signal)
+        # Инициализация Telegram бота
+        logger.info("Initializing Telegram bot...")
+        self.bot = TelegramBot()
+        self.bot.application = await self.bot.setup()
 
-    def _handle_signal(self, signum, frame):
-        logger.info(f"Received signal {signum}")
-        if self.flask_server:
-            self.flask_server.stop()
-        asyncio.get_event_loop().create_task(self._shutdown())
-
-    async def _shutdown(self):
-        if self.application:
-            await self.application.stop()
-            await self.application.shutdown()
-        self._stop_event.set()
-
-    async def start_services(self):
+    async def run_services(self):
         try:
-            # Запуск Flask
-            app = create_app()
-            self.flask_server = FlaskServer(app)
-            self.flask_server.start()
-
-            # Запуск Telegram бота
-            bot = TelegramBot()
-            self.application = (
-                Application.builder()
-                .token(Config.TELEGRAM_TOKEN)
-                .build()
+            logger.info("Starting bot polling...")
+            await self.bot.application.initialize()
+            await self.bot.application.start()
+            await self.bot.application.run_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=True
             )
-            
-            # Регистрация обработчиков
-            self.application.add_handler(CommandHandler("start", bot.start_command))
-            self.application.add_handler(CommandHandler("help", bot.help_command))
-
-            # Инициализация и запуск бота
-            await self.application.initialize()
-            await self.application.start()
-            logger.info("Starting Telegram bot polling...")
-            
-            # Ожидаем завершения работы
-            await self._stop_event.wait()
-            
         except Exception as e:
-            logger.error(f"Error in start_services: {e}")
+            logger.error(f"Error in services: {e}")
             raise
         finally:
-            if self.application:
-                await self.application.stop()
-            if self.flask_server:
-                self.flask_server.stop()
+            await self.shutdown()
+
+    async def shutdown(self):
+        logger.info("Shutting down services...")
+        
+        if self.flask_server:
+            self.flask_server.stop()
+
+        if self.bot and self.bot.application:
+            try:
+                await self.bot.application.stop()
+            except Exception as e:
+                logger.error(f"Error stopping bot: {e}")
+
+        logger.info("All services stopped")
+
+def signal_handler(signum, frame):
+    logger.info(f"Received signal {signum}")
+    if hasattr(signal_handler, 'loop'):
+        signal_handler.loop.create_task(shutdown_services())
+
+async def shutdown_services():
+    if hasattr(shutdown_services, 'manager'):
+        await shutdown_services.manager.shutdown()
 
 async def main():
-    service_manager = ServiceManager()
-    service_manager.setup_signal_handlers()
-    
     try:
-        await service_manager.start_services()
+        manager = ServiceManager()
+        shutdown_services.manager = manager
+        signal_handler.loop = asyncio.get_running_loop()
+        
+        # Установка обработчиков сигналов
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+
+        await manager.init_services()
+        await manager.run_services()
+
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt")
     except Exception as e:
         logger.error(f"Error in main: {e}")
+        raise
+    finally:
+        await manager.shutdown()
 
-if __name__ == '__main__':
+def run():
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("Shutting down...")
+        logger.info("Application shutdown by keyboard interrupt")
     except Exception as e:
         logger.error(f"Fatal error: {e}")
+    finally:
+        logger.info("Application stopped")
+
+if __name__ == '__main__':
+    run()

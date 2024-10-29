@@ -1,9 +1,6 @@
-# test_telegram.py
-
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import logging
-import asyncio
 from dotenv import load_dotenv
 import os
 
@@ -12,46 +9,64 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
-logger = logging.getLogger(__name__)
 
-class TelegramBot:
-    def __init__(self, token: str):
-        self.application = Application.builder().token(token).build()
-        self.setup_handlers()
-        
-    def setup_handlers(self):
-        # Добавляем базовые обработчики для тестирования
-        self.application.add_handler(CommandHandler("start", self.start_command))
-        self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
-        
-    async def start_command(self, update: Update, context):
-        await update.message.reply_text('Привет! Бот запущен и работает.')
-        
-    async def handle_message(self, update: Update, context):
-        await update.message.reply_text(f'Получено сообщение: {update.message.text}')
-        
-    async def start(self):
-        logger.info("Starting Telegram bot...")
-        await self.application.initialize()
-        await self.application.start()
-        await self.application.run_polling(allowed_updates=Update.ALL_TYPES)
-        
-    async def stop(self):
-        logger.info("Stopping Telegram bot...")
-        await self.application.stop()
-        await self.application.shutdown()
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /start."""
+    user = update.effective_user
+    await update.message.reply_text(
+        f'Привет, {user.first_name}! 👋\n'
+        'Я бот для анализа сценариев. Вот что я умею:\n'
+        '/help - показать справку\n'
+        '/analyze - начать анализ текста\n'
+        'Также вы можете просто отправить мне текст для анализа.'
+    )
 
-async def main():
-    bot = TelegramBot(os.getenv('TELEGRAM_TOKEN'))
-    try:
-        await bot.start()
-    except Exception as e:
-        logger.error(f"Error: {e}")
-    finally:
-        await bot.stop()
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /help."""
+    await update.message.reply_text(
+        'Справка по использованию бота:\n'
+        '1. Отправьте текст для анализа\n'
+        '2. Используйте /analyze для подробного анализа\n'
+        '3. /settings - настройки анализа'
+    )
+
+async def analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /analyze."""
+    await update.message.reply_text(
+        'Пожалуйста, отправьте текст, который нужно проанализировать.'
+    )
+
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик текстовых сообщений."""
+    text = update.message.text
+    # Здесь будет логика анализа текста
+    await update.message.reply_text(
+        f'Получен текст длиной {len(text)} символов.\n'
+        'Начинаю анализ...'
+    )
+
+def main():
+    """Запуск бота."""
+    application = Application.builder().token(os.getenv('TELEGRAM_TOKEN')).build()
+
+    # Добавляем обработчики команд
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("analyze", analyze))
+    
+    # Обработчик текстовых сообщений
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND, 
+        handle_text
+    ))
+
+    # Запускаем бота с дополнительными параметрами
+    application.run_polling(
+        poll_interval=1.0,
+        timeout=30,
+        drop_pending_updates=True,
+        allowed_updates=Update.ALL_TYPES
+    )
 
 if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("Received interrupt signal, shutting down Telegram bot...")
+    main()
