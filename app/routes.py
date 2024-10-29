@@ -17,7 +17,11 @@ main_bp = Blueprint('main', __name__)
 # Список доступных нарративных структур
 NARRATIVE_STRUCTURES = [structure.value for structure in StructureType if structure != StructureType.AUTO_DETECT]
 
-ALLOWED_EXTENSIONS = {'.txt', '.doc', '.docx', '.pdf'}
+ALLOWED_EXTENSIONS = {'txt', 'doc', 'docx', 'pdf'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 def ensure_upload_dir():
@@ -167,3 +171,20 @@ def test_ollama():
             'error': str(e),
             'model_info': model_api.get_model_info()
         }), 500
+
+@main_bp.errorhandler(413)
+def request_entity_too_large(error):
+    """Обработчик ошибки превышения размера файла"""
+    return jsonify({
+        'status': 'error',
+        'error': f'File too large. Maximum size is {MAX_FILE_SIZE/1024/1024}MB'
+    }), 413
+
+@main_bp.errorhandler(500)
+def internal_server_error(error):
+    """Обработчик внутренних ошибок сервера"""
+    logger.error(f"Internal server error: {str(error)}")
+    return jsonify({
+        'status': 'error',
+        'error': 'Internal server error occurred'
+    }), 500

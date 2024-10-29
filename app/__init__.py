@@ -23,12 +23,11 @@ def create_app(config_class=Config):
         os.path.dirname(os.path.abspath(__file__)), 
         'uploads'
     )
+    # Настройка конфигурации
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max-limit
+    app.config['UPLOAD_FOLDER'] = 'uploads'
     app.config['ALLOWED_EXTENSIONS'] = {'txt', 'pdf', 'doc', 'docx'}
     
-    # Создаем папку для загрузок, если она не существует
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
     app.register_blueprint(main_bp)
 
     return app

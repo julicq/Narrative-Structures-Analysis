@@ -2,134 +2,138 @@
 
 import asyncio
 import logging
-import signal
-import threading
-from flask import Flask
-from werkzeug.serving import make_server
-from bot.telegram_bot import TelegramBot
+from flask import Flask, request
 from app import create_app
-from shared.config import Config
-import nest_asyncio
+from bot.telegram_bot import TelegramBot
+from threading import Thread
+from werkzeug.serving import make_server
 
-# Применяем nest_asyncio для решения проблем с вложенными event loops
-nest_asyncio.apply()
-
+# Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-class FlaskServer(threading.Thread):
-    def __init__(self, app: Flask):
+class FlaskServerThread(Thread):
+    def __init__(self, app, host='0.0.0.0', port=5001):
         super().__init__()
-        self.app = app
-        self.server = None
-        self.daemon = True
-        self._stop_event = threading.Event()
+        self.srv = make_server(host, port, app)
+        self.ctx = app.app_context()
+        self.ctx.push()
 
     def run(self):
-        try:
-            self.server = make_server('0.0.0.0', Config.FLASK_PORT, self.app)
-            logger.info(f"Flask server starting on port {Config.FLASK_PORT}")
-            self.server.serve_forever()
-        except Exception as e:
-            logger.error(f"Flask server error: {e}")
+        logger.info('Starting Flask server')
+        self.srv.serve_forever()
 
-    def stop(self):
-        self._stop_event.set()
-        if self.server:
-            self.server.shutdown()
-            logger.info("Flask server stopped")
+    def shutdown(self):
+        self.srv.shutdown()
 
 class ServiceManager:
     def __init__(self):
-        self.flask_server = None
+        self._initialized = False
+        self._running = False
+        self._stop_event = asyncio.Event()
         self.bot = None
-        self._stop_event = None
+        self.flask_server = None
+        self.flask_thread = None
 
     async def init_services(self):
-        self._stop_event = asyncio.Event()
+        if self._initialized:
+            return
+
+        logger.info("Initializing services...")
         
         # Инициализация Flask
-        logger.info("Starting Flask server...")
-        app = create_app()
-        self.flask_server = FlaskServer(app)
-        self.flask_server.start()
-
-        # Инициализация Telegram бота
+        logger.info("Creating Flask application...")
+        self.flask_server = create_app()
+        
+        # Инициализация бота
         logger.info("Initializing Telegram bot...")
         self.bot = TelegramBot()
-        self.bot.application = await self.bot.setup()
+        await self.bot.setup()
+        
+        self._initialized = True
+        logger.info("Services initialized successfully")
 
     async def run_services(self):
+        """Основной метод запуска всех сервисов"""
+        if not self._initialized:
+            await self.init_services()
+        
+        self._running = True
+        
         try:
-            logger.info("Starting bot polling...")
-            await self.bot.application.initialize()
-            await self.bot.application.start()
-            await self.bot.application.run_polling(
-                allowed_updates=Update.ALL_TYPES,
-                drop_pending_updates=True
-            )
+            # Запуск Flask в отдельном потоке
+            self.flask_thread = FlaskServerThread(self.flask_server)
+            self.flask_thread.daemon = True
+            self.flask_thread.start()
+            logger.info("Flask server thread started")
+            
+            # Запуск бота
+            logger.info("Starting Telegram bot...")
+            await self.bot.start_polling()
+            
+            # Ждем сигнала остановки
+            while not self._stop_event.is_set():
+                await asyncio.sleep(1)
+            
         except Exception as e:
-            logger.error(f"Error in services: {e}")
+            logger.error(f"Error running services: {e}")
             raise
         finally:
+            self._running = False
             await self.shutdown()
 
     async def shutdown(self):
-        logger.info("Shutting down services...")
+        """Корректное завершение работы всех сервисов"""
+        if not self._running:
+            return
+            
+        logger.info("Initiating shutdown sequence...")
         
-        if self.flask_server:
-            self.flask_server.stop()
-
-        if self.bot and self.bot.application:
+        # Останавливаем бота
+        if self.bot:
             try:
-                await self.bot.application.stop()
+                await self.bot.stop()
+                logger.info("Telegram bot stopped successfully")
             except Exception as e:
-                logger.error(f"Error stopping bot: {e}")
+                logger.error(f"Error stopping Telegram bot: {e}")
+            finally:
+                self.bot = None
 
-        logger.info("All services stopped")
+        # Останавливаем Flask сервер
+        if self.flask_thread:
+            try:
+                self.flask_thread.shutdown()
+                self.flask_thread.join(timeout=5)
+                logger.info("Flask server stopped successfully")
+            except Exception as e:
+                logger.error(f"Error stopping Flask server: {e}")
+            finally:
+                self.flask_thread = None
 
-def signal_handler(signum, frame):
-    logger.info(f"Received signal {signum}")
-    if hasattr(signal_handler, 'loop'):
-        signal_handler.loop.create_task(shutdown_services())
-
-async def shutdown_services():
-    if hasattr(shutdown_services, 'manager'):
-        await shutdown_services.manager.shutdown()
+        self._initialized = False
+        self._running = False
+        logger.info("Shutdown completed")
 
 async def main():
+    """Точка входа для запуска сервисов"""
+    service_manager = ServiceManager()
     try:
-        manager = ServiceManager()
-        shutdown_services.manager = manager
-        signal_handler.loop = asyncio.get_running_loop()
-        
-        # Установка обработчиков сигналов
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
-
-        await manager.init_services()
-        await manager.run_services()
-
+        await service_manager.run_services()
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt")
+        service_manager._stop_event.set()
     except Exception as e:
-        logger.error(f"Error in main: {e}")
-        raise
+        logger.error(f"Unexpected error: {e}")
     finally:
-        await manager.shutdown()
+        await service_manager.shutdown()
 
-def run():
+if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("Application shutdown by keyboard interrupt")
+        logger.info("Application terminated by user")
     except Exception as e:
-        logger.error(f"Fatal error: {e}")
-    finally:
-        logger.info("Application stopped")
-
-if __name__ == '__main__':
-    run()
+        logger.error(f"Application crashed: {e}")

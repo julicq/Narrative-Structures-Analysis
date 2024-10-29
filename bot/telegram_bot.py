@@ -32,29 +32,30 @@ logger = logging.getLogger(__name__)
 
 class TelegramBot:
     def __init__(self):
-        self.evaluator = None
         self.application = None
-    
+        self._initialized = False
+        self._running = False
+        self._stop_event = asyncio.Event()
+        self.evaluator = None
+
     async def setup(self):
-        """Инициализация бота"""
+        if self._initialized:
+            return
+            
         # Инициализация LLM и evaluator
         llm = initialize_llm()
         if not llm:
             raise ValueError("Failed to initialize LLM")
         
         self.evaluator = NarrativeEvaluator(llm)
-        
-        # Создание приложения
         self.application = Application.builder().token(Config.TELEGRAM_TOKEN).build()
         
-        # Регистрация обработчиков
+        # Регистрируем обработчики
         self.register_handlers()
         
-        # Инициализация приложения
+        # Только инициализируем приложение
         await self.application.initialize()
-        await self.application.start()
-        
-        return self.application
+        self._initialized = True
 
     def register_handlers(self):
         """Регистрация обработчиков команд"""
@@ -78,6 +79,59 @@ class TelegramBot:
         
         # Обработчик ошибок
         self.application.add_error_handler(self.error_handler)
+
+    async def start_polling(self):
+        if not self._initialized:
+            await self.setup()
+            
+        if not self.application:
+            raise RuntimeError("Application not initialized")
+        
+        if self._running:
+            return
+            
+        self._running = True
+        
+        try:
+            # Запускаем polling в отдельной задаче
+            polling_task = asyncio.create_task(self._run_polling())
+            await self._stop_event.wait()  # Ждем сигнал остановки
+            
+            # Останавливаем polling
+            await self.stop()
+            await polling_task
+            
+        except asyncio.CancelledError:
+            logger.info("Bot polling cancelled")
+            await self.stop()
+            raise
+        finally:
+            self._running = False
+
+    async def _run_polling(self):
+        """Внутренний метод для запуска polling"""
+        try:
+            await self.application.start()
+            while not self._stop_event.is_set():
+                await asyncio.sleep(1)  # Небольшая задержка для снижения нагрузки
+        finally:
+            await self.application.stop()
+
+    async def stop(self):
+        """Остановка бота"""
+        if not self._running:
+            return
+            
+        self._stop_event.set()
+        if self.application:
+            try:
+                await self.application.stop()
+                self.application = None
+                self._initialized = False
+                self._running = False
+            except Exception as e:
+                logger.error(f"Error stopping application: {e}")
+                raise
 
     def get_main_keyboard(self):
         """Создание основной клавиатуры"""
@@ -254,24 +308,3 @@ class TelegramBot:
             await update.message.reply_text(
                 "Произошла ошибка при обработке запроса. Пожалуйста, попробуйте позже."
             )
-
-async def run_bot():
-    """Асинхронный запуск бота"""
-    bot = TelegramBot()
-    await bot.setup()
-    await bot.application.run_polling(
-        allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True
-    )
-
-def main():
-    """Точка входа"""
-    try:
-        asyncio.run(run_bot())
-    except KeyboardInterrupt:
-        logger.info("Bot stopped by user")
-    except Exception as e:
-        logger.error(f"Fatal error: {e}")
-
-if __name__ == '__main__':
-    main()
