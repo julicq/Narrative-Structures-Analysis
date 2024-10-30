@@ -4,6 +4,9 @@ import logging
 from narr_mod import StructureType, get_narrative_structure
 from .extractor import extract_structure
 from .converter import convert_to_format, StoryStructureConverter
+from typing import Union, Optional
+from gigachat import GigaChat
+from gigachat.models import Chat, Messages, MessagesRole
 
 logger = logging.getLogger(__name__)
 
@@ -12,15 +15,50 @@ class NarrativeEvaluator:
     Класс для оценки и анализа нарративных структур текста.
     """
     
-    def __init__(self, llm):
+    def __init__(self, llm, gigachat_token: Optional[str] = None):
         """
         Инициализация оценщика нарративных структур.
         
         Args:
-            llm: Модель машинного обучения для анализа текста
+            llm: Основная модель (Ollama)
+            gigachat_token: Токен для GigaChat (опционально)
         """
         self.llm = llm
         self.structure_converter = StoryStructureConverter()
+        self.gigachat = None
+        if gigachat_token:
+            try:
+                self.gigachat = GigaChat(credentials=gigachat_token)
+                logger.info("GigaChat initialized successfully")
+            except Exception as e:
+                logger.warning(f"Failed to initialize GigaChat: {e}")
+
+    def _call_llm(self, prompt: str) -> str:
+        """
+        Вызывает LLM с fallback на GigaChat.
+        
+        Args:
+            prompt: Текст промпта
+            
+        Returns:
+            str: Ответ модели
+        """
+        try:
+            return self.llm(prompt)
+        except Exception as e:
+            logger.warning(f"Primary LLM failed: {e}")
+            if self.gigachat:
+                try:
+                    messages = [
+                        {"role": "user", "content": prompt}
+                    ]
+                    response = self.gigachat.chat(messages)
+                    return response.choices[0].message.content
+                except Exception as e:
+                    logger.error(f"GigaChat also failed: {e}")
+                    raise
+            else:
+                raise
 
     def classify(self, text: str) -> str:
         """
@@ -138,7 +176,7 @@ class NarrativeEvaluator:
 
         {text}"""
         
-        response = self.llm(prompt)
+        response = self._call_llm(prompt)
         
         try:
             structure_type = StructureType(structure)
