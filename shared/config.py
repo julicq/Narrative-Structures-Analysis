@@ -14,6 +14,9 @@ class ModelType(Enum):
     OLLAMA = "ollama"
 
 class Config:
+    # Базовые настройки
+    DEBUG: bool = os.getenv('DEBUG', 'False').lower() == 'true'
+
     # Flask конфигурация
     FLASK_HOST: str = '0.0.0.0'
     FLASK_PORT: int = 5001
@@ -34,7 +37,7 @@ class Config:
     # Настройки GigaChat
     GIGACHAT_CLIENT_ID: Optional[str] = os.getenv('GIGACHAT_CLIENT_ID')
     GIGACHAT_CLIENT_SECRET: Optional[str] = os.getenv('GIGACHAT_CLIENT_SECRET')
-    GIGACHAT_VERIFY_SSL: bool = os.getenv('GIGACHAT_VERIFY_SSL', 'True') == 'True'
+    GIGACHAT_VERIFY_SSL: bool = os.getenv('GIGACHAT_VERIFY_SSL', 'False').lower() == 'true'
     GIGACHAT_MODEL_NAME: str = os.getenv('GIGACHAT_MODEL_NAME', 'GigaChat:latest')
     GIGACHAT_SCOPE: str = os.getenv('GIGACHAT_SCOPE', 'GIGACHAT_API_PERS')
     GIGACHAT_BASE_URL: str = os.getenv(
@@ -45,7 +48,7 @@ class Config:
         'GIGACHAT_AUTH_URL',
         'https://ngw.devices.sberbank.ru:9443/api/v2/oauth'
     )
-    GIGACHAT_CREDENTIALS: str = os.getenv('GIGACHAT_CREDENTIALS')
+    GIGACHAT_TOKEN: str = os.getenv('GIGACHAT_TOKEN')
 
     # Настройки OpenAI
     OPENAI_API_KEY: Optional[str] = os.getenv('OPENAI_API_KEY')
@@ -91,6 +94,16 @@ class Config:
         }
         return credentials.get(model_type)
 
+
+    @classmethod
+    def validate(cls):
+        """Проверка конфигурации"""
+        if not cls.TELEGRAM_TOKEN:
+            raise ValueError("TELEGRAM_TOKEN не установлен")
+            
+        if cls.ACTIVE_MODEL == ModelType.GIGACHAT and not cls.GIGACHAT_TOKEN:
+            raise ValueError("GIGACHAT_TOKEN не установлен, но выбрана модель GIGACHAT")
+        
     @classmethod
     def validate_model_credentials(cls, model_type: ModelType) -> bool:
         """Проверка наличия необходимых учетных данных для модели"""

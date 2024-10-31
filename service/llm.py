@@ -21,6 +21,7 @@ import os
 from dotenv import load_dotenv
 import urllib3
 import requests
+from shared.config import Config
 
 # Отключаем предупреждения о небезопасном SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -49,7 +50,7 @@ class GigaChatConfig(BaseModel):
     
     client_id: str
     client_secret: str
-    verify_ssl: bool = False
+    verify_ssl: bool = Field(default_factory=lambda: Config.GIGACHAT_VERIFY_SSL)
     auth_url: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
     base_url: str = "https://gigachat.devices.sberbank.ru/api/v1"
     scope: str = "GIGACHAT_API_PERS"
@@ -88,7 +89,6 @@ class CustomGigaChat(BaseChatModel):
         config = GigaChatConfig(
             client_id=client_id,
             client_secret=client_secret,
-            verify_ssl=kwargs.get('verify_ssl', False)
         )
         
         # Инициализируем базовый класс
@@ -104,8 +104,8 @@ class CustomGigaChat(BaseChatModel):
         """Получение токена доступа"""
         try:
             credentials = base64.b64encode(
-                f"{self.config.client_id}:{self.config.client_secret}".encode()
-            ).decode()
+                f"{self.config.client_id}:{self.config.client_secret}".encode('utf-8')
+            ).decode('utf-8')
             
             headers = {
                 'Content-Type': 'application/x-www-form-urlencoded',
@@ -125,10 +125,13 @@ class CustomGigaChat(BaseChatModel):
             logger.debug(f"Auth response content: {response.text}")
             
             response.raise_for_status()
-            self.access_token = response.json()['access_token']
+            token_data = response.json()
+            self.access_token = token_data['access_token']
             
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             logger.error(f"Failed to get access token: {str(e)}")
+            if response and hasattr(response, 'text'):
+                logger.error(f"Response content: {response.text}")
             raise
 
     def _generate(

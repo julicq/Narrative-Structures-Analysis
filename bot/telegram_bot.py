@@ -49,19 +49,28 @@ class TelegramBot:
             
         logger.info("Setting up Telegram bot...")
         
-        # Инициализация LLM и evaluator
-        llm = initialize_llm()
-        if not llm:
-            logger.error("Failed to initialize LLM")
-            raise ValueError("Failed to initialize LLM")
-        
-        self.evaluator = NarrativeEvaluator(llm)
+        # Инициализация LLM и evaluator с поддержкой GigaChat
+        try:
+            llm = initialize_llm()
+            gigachat_token = os.getenv('GIGACHAT_TOKEN')
+            
+            self.evaluator = NarrativeEvaluator(
+                llm=llm,
+                gigachat_token=gigachat_token
+            )
+            logger.info("Evaluator initialized successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize LLM and evaluator: {e}")
+            raise ValueError("Failed to initialize LLM and evaluator")
+    
         self.application = Application.builder().token(Config.TELEGRAM_TOKEN).build()
         
         # Регистрируем обработчики
         self.register_handlers()
         self._initialized = True
         logger.info("Telegram bot setup completed")
+
 
     def register_handlers(self):
         """Регистрация обработчиков команд"""
@@ -347,10 +356,29 @@ class TelegramBot:
         try:
             if structure == "Auto-detect":
                 logger.info("Using auto-detection for structure")
-                structure = self.evaluator.classify(text)
-                logger.info(f"Auto-detected structure: {structure}")
+                try:
+                    structure = self.evaluator.classify(text)
+                    logger.info(f"Auto-detected structure: {structure}")
+                except Exception as e:
+                    logger.error(f"Error in structure classification: {e}")
+                    await update.message.reply_text(
+                        "❌ Ошибка при определении структуры. Попробуйте выбрать структуру вручную."
+                    )
+                    return
 
-            result = self.evaluator.analyze_specific_structure(text, structure)
+            try:
+                result = self.evaluator.analyze_specific_structure(text, structure)
+            except Exception as e:
+                logger.error(f"Error in analyze_specific_structure: {e}")
+                if "Connection refused" in str(e):
+                    await update.message.reply_text(
+                        "⚠️ Основной сервис анализа недоступен, переключаюсь на резервный...",
+                        parse_mode=ParseMode.HTML
+                    )
+                    # Повторная попытка (теперь должен сработать GigaChat)
+                    result = self.evaluator.analyze_specific_structure(text, structure)
+                else:
+                    raise
             
             # Формируем упрощенный ответ без визуализации
             response_parts = []
@@ -360,7 +388,7 @@ class TelegramBot:
             
             # Добавляем основной анализ
             if 'analysis' in result and result['analysis']:
-                analysis_text = result['analysis'].replace('*', '•')  # Заменяем markdown-символы
+                analysis_text = result['analysis'].replace('*', '•')
                 response_parts.append(f"<b>Анализ текста:</b>\n{analysis_text}")
             
             # Объединяем все части
@@ -384,6 +412,7 @@ class TelegramBot:
             await update.message.reply_text(
                 "❌ Произошла ошибка при анализе текста. Пожалуйста, попробуйте позже."
             )
+
 
     async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик ошибок"""

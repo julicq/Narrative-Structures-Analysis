@@ -24,10 +24,10 @@ class ModelAPI:
         """Инициализация выбранной модели"""
         try:
             if Config.ACTIVE_MODEL == ModelType.GIGACHAT:
-                if not Config.GIGACHAT_CREDENTIALS:
+                if not Config.GIGACHAT_TOKEN:
                     raise ValueError("GigaChat credentials not found")
                 return GigaChat(
-                    credentials=Config.GIGACHAT_CREDENTIALS,
+                    credentials=Config.GIGACHAT_TOKEN,
                     verify_ssl_certs=False
                 )
             

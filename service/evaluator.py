@@ -36,21 +36,20 @@ class NarrativeEvaluator:
     def _call_llm(self, prompt: str) -> str:
         """
         Вызывает LLM с fallback на GigaChat.
-        
-        Args:
-            prompt: Текст промпта
-            
-        Returns:
-            str: Ответ модели
         """
         try:
-            return self.llm(prompt)
+            # Используем .invoke() вместо прямого вызова
+            response = self.llm.invoke(prompt)
+            return response
         except Exception as e:
             logger.warning(f"Primary LLM failed: {e}")
             if self.gigachat:
                 try:
                     messages = [
-                        {"role": "user", "content": prompt}
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
                     ]
                     response = self.gigachat.chat(messages)
                     return response.choices[0].message.content
@@ -59,6 +58,7 @@ class NarrativeEvaluator:
                     raise
             else:
                 raise
+
 
     def classify(self, text: str) -> str:
         """
