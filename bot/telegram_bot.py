@@ -368,6 +368,39 @@ class TelegramBot:
 
             try:
                 result = self.evaluator.analyze_specific_structure(text, structure)
+                
+                # Проверяем наличие и тип результата
+                if not isinstance(result, dict):
+                    raise ValueError("Invalid result format")
+                
+                # Формируем упрощенный ответ без визуализации
+                response_parts = []
+                
+                # Добавляем информацию о структуре
+                if 'structure' in result:
+                    response_parts.append(f"📊 <b>Тип структуры:</b> {result['structure']}\n")
+                
+                # Добавляем основной анализ
+                if 'analysis' in result and result['analysis']:
+                    analysis_text = str(result['analysis']).replace('*', '•')
+                    response_parts.append(f"<b>Анализ текста:</b>\n{analysis_text}")
+                
+                # Объединяем все части
+                response = '\n'.join(response_parts)
+                
+                # Разбиваем длинные сообщения на части если необходимо
+                if len(response) > 4096:
+                    for x in range(0, len(response), 4096):
+                        await update.message.reply_text(
+                            response[x:x+4096],
+                            parse_mode=ParseMode.HTML
+                        )
+                else:
+                    await update.message.reply_text(
+                        response,
+                        parse_mode=ParseMode.HTML
+                    )
+                    
             except Exception as e:
                 logger.error(f"Error in analyze_specific_structure: {e}")
                 if "Connection refused" in str(e):
@@ -379,39 +412,13 @@ class TelegramBot:
                     result = self.evaluator.analyze_specific_structure(text, structure)
                 else:
                     raise
-            
-            # Формируем упрощенный ответ без визуализации
-            response_parts = []
-            
-            # Добавляем информацию о структуре
-            response_parts.append(f"📊 <b>Тип структуры:</b> {result['structure']}\n")
-            
-            # Добавляем основной анализ
-            if 'analysis' in result and result['analysis']:
-                analysis_text = result['analysis'].replace('*', '•')
-                response_parts.append(f"<b>Анализ текста:</b>\n{analysis_text}")
-            
-            # Объединяем все части
-            response = '\n'.join(response_parts)
-            
-            # Разбиваем длинные сообщения на части если необходимо
-            if len(response) > 4096:
-                for x in range(0, len(response), 4096):
-                    await update.message.reply_text(
-                        response[x:x+4096],
-                        parse_mode=ParseMode.HTML
-                    )
-            else:
-                await update.message.reply_text(
-                    response,
-                    parse_mode=ParseMode.HTML
-                )
-                
+                    
         except Exception as e:
             logger.error(f"Error in process_text: {e}", exc_info=True)
             await update.message.reply_text(
                 "❌ Произошла ошибка при анализе текста. Пожалуйста, попробуйте позже."
             )
+
 
 
     async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

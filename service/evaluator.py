@@ -40,7 +40,13 @@ class NarrativeEvaluator:
         try:
             # Используем .invoke() вместо прямого вызова
             response = self.llm.invoke(prompt)
-            return response
+            # Handle AIMessage or similar objects
+            if hasattr(response, 'content'):
+                return response.content
+            elif isinstance(response, str):
+                return response
+            else:
+                return str(response)
         except Exception as e:
             logger.warning(f"Primary LLM failed: {e}")
             if self.gigachat:
@@ -70,47 +76,108 @@ class NarrativeEvaluator:
         Returns:
             str: Определенный тип структуры или "unknown"
         """
-        prompt = f"""Analyze the following text and determine its narrative structure. 
-        Choose from the following options:
-        1. Eight Point Arc (Nigel Watts)
-        2. Hero's journey (Chris Vogler)
-        3. Four-Act Structure
-        4. Paradigm (Sid Field)
-        5. Three-Act Structure
-        6. The Monomyth (Joseph Campbell)
-        7. The Structure of Story (Chris Soth)
-        8. Story Circle (Dan Harmon)
-        9. Consistent Approach (Paul Gulino)
-
-        Provide your answer as a single word: "watts_eight_point_arc", "hero_journey", "three_act", "four_act", "monomyth", "soth_story_structure", "harmon_story_circle", "field_paradigm" or "gulino_sequence".
-        If none of these structures fit, return "unknown" - only if there is no REALLY a way to determine the type of structure.
-
-        Text: {text}
-
-        Structure:"""
+        prompt = f"""As a screenplay structure expert, analyze this screenplay and determine its narrative structure. 
+        Consider the following aspects:
+        1. Plot progression and major turning points
+        2. Character development arcs
+        3. Act structure and scene organization
+        4. Key dramatic moments and their placement
         
-        response = self.llm(prompt)
-        structure = response.strip().lower()
+        Choose the MOST APPROPRIATE structure from these options:
+        1. "watts_eight_point_arc" - Eight Point Arc (Nigel Watts)
+        - Stasis → Trigger → Quest → Surprise → Critical Choice → Climax → Reversal → Resolution
         
-        logger.info(f"Classifier raw response: {structure}")
+        2. "vogler_hero_journey" - Hero's Journey (Chris Vogler)
+        - Ordinary World → Call to Adventure → Refusal → Meeting the Mentor → Crossing the Threshold → Tests, Allies, Enemies → Approach → Ordeal → Reward → Road Back → Resurrection → Return
+        
+        3. "three_act" - Three-Act Structure
+        - Setup (Act 1) → Confrontation (Act 2) → Resolution (Act 3)
+        - With clear inciting incident, midpoint, and climax
+        
+        4. "four_act" - Four-Act Structure
+        - Setup → Development → Climax → Resolution
+        - Each act approximately 25-30 pages
+        
+        5. "field_paradigm" - Paradigm (Sid Field)
+        - Setup → Plot Point 1 → Confrontation → Plot Point 2 → Resolution
+        - Strong emphasis on plot points
+        
+        6. "monomyth" - The Monomyth (Joseph Campbell)
+        - Departure → Initiation → Return
+        - Focus on hero's psychological/mythological journey
+        
+        7. "soth_story_structure" - Mini-Movie Method (Chris Soth)
+        - Eight clear 15-minute segments
+        - Each segment with its own dramatic arc
+        
+        8. "harmon_story_circle" - Story Circle (Dan Harmon)
+        - You → Need → Go → Search → Find → Take → Return → Change
+        
+        9. "gulino_sequence" - Sequence Approach (Paul Gulino)
+        - Eight 8-15 page sequences
+        - Each sequence as a mini-movie
+
+        Analyze the following screenplay excerpt and return ONLY the structure identifier (e.g. "three_act") that best matches. 
+        If truly impossible to determine, return "unknown".
+
+        Screenplay:
+        {text}
+
+        Structure identifier:"""
         
         try:
-            # Проверяем, является ли структура валидным значением StructureType
-            StructureType(structure)
-            return structure
-        except ValueError:
-            return "unknown"
+            response = self._call_llm(prompt)
+            structure = response.strip().lower()
+            
+            logger.info(f"Classifier raw response: {structure}")
+            
+            # Проверяем наличие структуры в StructureType
+            try:
+                StructureType(structure)
+                return structure
+            except ValueError:
+                # Если точного совпадения нет, пробуем найти ближайшее
+                structure_mapping = {
+                    'three': 'three_act',
+                    'three-act': 'three_act',
+                    'three act': 'three_act',
+                    'four': 'four_act',
+                    'four-act': 'four_act',
+                    'four act': 'four_act',
+                    'hero': 'vogler_hero_journey',
+                    "hero's journey": 'vogler_hero_journey',
+                    'heros journey': 'vogler_hero_journey',
+                    'eight point': 'watts_eight_point_arc',
+                    'eight-point': 'watts_eight_point_arc',
+                    'watts': 'watts_eight_point_arc',
+                    'field': 'field_paradigm',
+                    'paradigm': 'field_paradigm',
+                    'campbell': 'monomyth',
+                    'soth': 'soth_story_structure',
+                    'mini-movie': 'soth_story_structure',
+                    'mini movie': 'soth_story_structure',
+                    'harmon': 'harmon_story_circle',
+                    'story circle': 'harmon_story_circle',
+                    'gulino': 'gulino_sequence',
+                    'sequence': 'gulino_sequence'
+                }
+                
+                # Ищем ближайшее совпадение
+                for key, value in structure_mapping.items():
+                    if key in structure:
+                        return value
+                
+                logger.warning(f"Could not map structure '{structure}' to known type")
+                return "three_act"  # Возвращаем three_act как наиболее общую структуру
+                
+        except Exception as e:
+            logger.error(f"Error in classify: {e}")
+            return "three_act"  # В случае ошибки возвращаем three_act как безопасный вариант
+
 
     def evaluate(self, text: str, structure_name: str = None) -> dict:
         """
         Проводит полный анализ текста согласно определенной структуре.
-        
-        Args:
-            text: Текст для анализа
-            structure_name: Название структуры (опционально)
-            
-        Returns:
-            dict: Результаты анализа
         """
         if structure_name is None:
             structure_name = self.classify(text)
@@ -122,8 +189,8 @@ class NarrativeEvaluator:
         formatted_structure = convert_to_format(structure, structure_name)
         
         # Получаем класс для работы с выбранной структурой
-        NarrativeStructureClass = get_narrative_structure(structure_name)
-        narrative_structure = NarrativeStructureClass()
+        StructureClass = get_narrative_structure(structure_name)  # Get the class
+        narrative_structure = StructureClass()  # Create the instance
         
         # Проверяем корректность структуры
         if not isinstance(formatted_structure, dict):
@@ -160,54 +227,57 @@ class NarrativeEvaluator:
     def analyze_specific_structure(self, text: str, structure: str) -> dict:
         """
         Анализирует текст согласно конкретной нарративной структуре.
-        
-        Args:
-            text: Текст для анализа
-            structure: Название структуры
-            
-        Returns:
-            dict: Результаты анализа
         """
-        # Формируем промпт для анализа
-        display_name = StructureType.get_display_name(structure)
-        prompt = f"""Analyze the following text according to the {display_name} narrative structure. 
-        NEVER try to guess what this script is film from! 
-        Provide a detailed breakdown of how the text fits or doesn't fit this structure:
-
-        {text}"""
-        
-        response = self._call_llm(prompt)
-        
         try:
-            structure_type = StructureType(structure)
-        except ValueError:
-            logger.warning(f"Structure not found: {structure}. Using default structure.")
-            structure_type = StructureType.THREE_ACT
-            structure = structure_type.value
+            # Формируем промпт для анализа
+            display_name = StructureType.get_display_name(structure)
+            prompt = f"""Analyze the following text according to the {display_name} narrative structure. 
+            NEVER try to guess what this script is film from! 
+            Provide a detailed breakdown of how the text fits or doesn't fit this structure:
 
-        # Получаем класс структуры и создаем экземпляр
-        narrative_structure = get_narrative_structure(structure_type)
-        
-        # Извлекаем и форматируем структуру
-        extracted_structure = extract_structure(text)
-        formatted_structure = convert_to_format(extracted_structure, structure)
-        
-        # Проводим анализ
-        try:
-            structure_analysis = narrative_structure.analyze(formatted_structure)
-            visualization = narrative_structure.visualize(structure_analysis)
+            {text}"""
+            
+            response = self._call_llm(prompt)
+            
+            try:
+                structure_type = StructureType(structure)
+            except ValueError:
+                logger.warning(f"Structure not found: {structure}. Using default structure.")
+                structure_type = StructureType.THREE_ACT
+                structure = structure_type.value
+
+            # Получаем класс структуры и создаем экземпляр
+            StructureClass = get_narrative_structure(structure_type)  # Get the class
+            narrative_structure = StructureClass()  # Create the instance
+            
+            # Извлекаем и форматируем структуру
+            extracted_structure = extract_structure(text)
+            formatted_structure = convert_to_format(extracted_structure, structure)
+            
+            # Проводим анализ
+            try:
+                structure_analysis = narrative_structure.analyze(formatted_structure)
+                visualization = narrative_structure.visualize(structure_analysis)
+            except Exception as e:
+                logger.error(f"Error during structure analysis: {e}")
+                structure_analysis = {}
+                visualization = None
+            
+            # Убедимся, что response - строка
+            if not isinstance(response, str):
+                response = str(response)
+            
+            return {
+                "structure": display_name,
+                "analysis": response,
+                "formatted_structure": formatted_structure,
+                "structure_analysis": structure_analysis,
+                "visualization": visualization
+            }
         except Exception as e:
-            logger.error(f"Error during structure analysis: {e}")
-            structure_analysis = {}
-            visualization = None
-        
-        return {
-            "structure": display_name,
-            "analysis": response,
-            "formatted_structure": formatted_structure,
-            "structure_analysis": structure_analysis,
-            "visualization": visualization
-        }
+            logger.error(f"Error in analyze_specific_structure: {e}")
+            raise
+
 
     def get_available_structures(self) -> list:
         """

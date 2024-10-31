@@ -116,27 +116,27 @@ class NarrativeStructure(ABC):
         [существующий текст промпта]
         """
 
-def get_narrative_structure(structure_type: StructureType) -> NarrativeStructure:
+def get_narrative_structure(structure_type: StructureType) -> type[NarrativeStructure]:
     """
-    Фабричный метод для создания анализатора нарративной структуры
+    Фабричный метод для получения класса анализатора нарративной структуры
     
     Args:
         structure_type: Тип нарративной структуры
         
     Returns:
-        NarrativeStructure: Экземпляр анализатора
+        Type[NarrativeStructure]: Класс анализатора
         
     Raises:
         ValueError: Если указан неизвестный тип структуры
     """
     if structure_type == StructureType.AUTO_DETECT:
-        # Здесь можно добавить логику автоопределения структуры
         raise NotImplementedError("Auto detection not implemented yet")
         
     try:
         module = import_module(f"narr_mod.{structure_type.value}")
         class_name = ''.join(word.capitalize() for word in structure_type.value.split('_'))
         structure_class = getattr(module, class_name)
-        return structure_class()
+        return structure_class  # Return the class, not an instance
     except (ImportError, AttributeError) as e:
         raise ValueError(f"Unknown structure type: {structure_type}") from e
+

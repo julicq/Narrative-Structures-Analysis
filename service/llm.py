@@ -1,6 +1,7 @@
 # service/llm.py
 
 import base64
+import pathlib
 from typing import Optional, Union, Dict, Any, List, Tuple
 import uuid
 from langchain_ollama import OllamaLLM
@@ -28,7 +29,14 @@ import time
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Загружаем переменные окружения
-load_dotenv()
+load_dotenv(override=True)
+
+# Проверка загруженных значений
+print("Loaded environment variables:")
+print(f"GIGACHAT_CLIENT_ID: {os.getenv('GIGACHAT_CLIENT_ID')}")
+print(f"GIGACHAT_SCOPE: {os.getenv('GIGACHAT_SCOPE')}")
+print(f"GIGACHAT_VERIFY_SSL: {os.getenv('GIGACHAT_VERIFY_SSL')}")
+print(f"GIGACHAT_CERT: {os.getenv('GIGACHAT_CERT')}")
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -82,6 +90,11 @@ class CustomGigaChat(BaseChatModel):
         # Получаем учетные данные из переменных окружения
         client_id = os.getenv('GIGACHAT_CLIENT_ID')
         client_secret = os.getenv('GIGACHAT_CLIENT_SECRET')
+        logger.debug("Initializing CustomGigaChat with config:")
+        logger.debug(f"Client ID: {kwargs.get('client_id', 'Not provided')}")
+        logger.debug(f"Scope: {kwargs.get('scope', 'Not provided')}")
+        logger.debug(f"Verify SSL: {kwargs.get('verify_ssl', 'Not provided')}")
+        logger.debug(f"Cert Path: {kwargs.get('cert_path', 'Not provided')}")
 
         if not client_id or not client_secret:
             raise ValueError("GIGACHAT_CLIENT_ID and GIGACHAT_CLIENT_SECRET must be set in environment variables")
