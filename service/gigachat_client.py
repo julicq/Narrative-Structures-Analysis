@@ -1,3 +1,5 @@
+# service/gigachat_client.py
+
 import requests
 import uuid
 import json

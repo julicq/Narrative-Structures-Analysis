@@ -4,6 +4,7 @@ from enum import Enum
 from typing import Optional
 import os
 from dotenv import load_dotenv
+import traceback
 
 load_dotenv()
 
@@ -13,6 +14,15 @@ class ModelType(Enum):
     ANTHROPIC = "anthropic"
     OLLAMA = "ollama"
 
+def debug_env_value(key: str, default: str = None) -> str:
+    """Get environment variable value with debug information."""
+    value = os.getenv(key, default)
+    if value:
+        # Убираем комментарии и лишние пробелы
+        value = value.split('#')[0].strip()
+    print(f"Loading {key}={value}")
+    return value
+
 class Config:
     # Базовые настройки
     DEBUG: bool = os.getenv('DEBUG', 'False').lower() == 'true'
@@ -21,14 +31,13 @@ class Config:
     FLASK_HOST: str = '0.0.0.0'
     FLASK_PORT: int = 5001
     FLASK_ENV = os.getenv('FLASK_ENV', 'development')
-    DEBUG = os.getenv('DEBUG', 'True') == 'True'
     SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key')
 
     # Telegram конфигурация
     TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 
-    # Активная модель
-    ACTIVE_MODEL: ModelType = ModelType(os.getenv('ACTIVE_MODEL', 'gigachat').lower())
+    # Активная модель - используем debug_env_value для отладки
+    ACTIVE_MODEL: ModelType = ModelType(debug_env_value('ACTIVE_MODEL', 'gigachat').lower())
 
     # Настройки Ollama
     OLLAMA_MODEL_NAME: str = os.getenv('OLLAMA_MODEL_NAME', 'llama3.2')
@@ -49,6 +58,7 @@ class Config:
         'https://ngw.devices.sberbank.ru:9443/api/v2/oauth'
     )
     GIGACHAT_TOKEN: str = os.getenv('GIGACHAT_TOKEN')
+    GIGACHAT_CERT: str = os.getenv('GIGACHAT_CERT')
 
     # Настройки OpenAI
     OPENAI_API_KEY: Optional[str] = os.getenv('OPENAI_API_KEY')
