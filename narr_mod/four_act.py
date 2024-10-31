@@ -8,14 +8,17 @@ from narr_mod import NarrativeStructure, StructureType, AnalysisResult, Analysis
 @dataclass
 class Act:
     name: str
+    name_en: str
     description: str
+    description_en: str
     key_elements: List[str]
+    key_elements_en: List[str]
     analysis_criteria: List[str]
+    analysis_criteria_en: List[str]
 
 class FourAct(NarrativeStructure):
     """Implementation of Four-Act Structure narrative analysis."""
 
-    # Добавляем реализацию абстрактного метода structure_type
     @property
     def structure_type(self) -> StructureType:
         return StructureType.FOUR_ACT
@@ -29,40 +32,72 @@ class FourAct(NarrativeStructure):
     # Определение структуры актов
     ACTS: ClassVar[Dict[str, Act]] = {
         ACT_SETUP: Act(
-            name="Act 1",
-            description="Setup",
-            key_elements=['setting', 'main characters', 'initial conflict'],
+            name="Акт 1",
+            name_en="Act 1",
+            description="Завязка",
+            description_en="Setup",
+            key_elements=['место действия', 'главные герои', 'начальный конфликт'],
+            key_elements_en=['setting', 'main characters', 'initial conflict'],
             analysis_criteria=[
+                "установление места действия",
+                "представление персонажей",
+                "представление начального конфликта"
+            ],
+            analysis_criteria_en=[
                 "establishment of setting",
                 "character introduction",
                 "initial conflict presentation"
             ]
         ),
         ACT_COMPLICATION: Act(
-            name="Act 2",
-            description="Complication",
-            key_elements=['challenge', 'obstacle', 'stakes'],
+            name="Акт 2",
+            name_en="Act 2",
+            description="Осложнение",
+            description_en="Complication",
+            key_elements=['испытание', 'препятствие', 'ставки'],
+            key_elements_en=['challenge', 'obstacle', 'stakes'],
             analysis_criteria=[
+                "введение испытаний",
+                "повышение ставок",
+                "развитие препятствий"
+            ],
+            analysis_criteria_en=[
                 "introduction of challenges",
                 "raising stakes",
                 "obstacle development"
             ]
         ),
         ACT_DEVELOPMENT: Act(
-            name="Act 3",
-            description="Development",
-            key_elements=['conflict', 'develop', 'climax'],
+            name="Акт 3",
+            name_en="Act 3",
+            description="Развитие",
+            description_en="Development",
+            key_elements=['конфликт', 'развитие', 'кульминация'],
+            key_elements_en=['conflict', 'develop', 'climax'],
             analysis_criteria=[
+                "развитие конфликта",
+                "нарастание к кульминации",
+                "эволюция персонажей"
+            ],
+            analysis_criteria_en=[
                 "conflict development",
                 "build-up to climax",
                 "character evolution"
             ]
         ),
         ACT_RESOLUTION: Act(
-            name="Act 4",
-            description="Resolution",
-            key_elements=['resolve', 'resolution', 'conclusion', 'end'],
+            name="Акт 4",
+            name_en="Act 4",
+            description="Развязка",
+            description_en="Resolution",
+            key_elements=['разрешение', 'развязка', 'заключение', 'конец'],
+            key_elements_en=['resolve', 'resolution', 'conclusion', 'end'],
             analysis_criteria=[
+                "разрешение конфликта",
+                "завершение истории",
+                "завершение арок персонажей"
+            ],
+            analysis_criteria_en=[
                 "conflict resolution",
                 "story conclusion",
                 "character arcs completion"
@@ -95,27 +130,25 @@ class FourAct(NarrativeStructure):
     }
     """
 
-    def analyze(self, text: str) -> AnalysisResult:
+    def analyze(self, text: str, lang: str = 'en') -> AnalysisResult:
         """
         Analyze the narrative structure using the Four-Act model.
         
         Args:
             text: Input text to analyze
+            lang: Language for analysis ('en' or 'ru')
             
         Returns:
             AnalysisResult: Complete analysis results
         """
-        # Выполняем начальный анализ
-        initial_analysis = self._perform_initial_analysis(text)
-        double_check_result = self._double_check_analysis(text, initial_analysis)
+        initial_analysis = self._perform_initial_analysis(text, lang)
+        double_check_result = self._double_check_analysis(text, initial_analysis, lang)
         
-        # Формируем структуру результата
         structure = {
             "acts": initial_analysis,
             "double_check": double_check_result,
         }
         
-        # Создаем метаданные
         metadata = AnalysisMetadata(
             model_name="gpt-4",
             model_version="1.0",
@@ -125,11 +158,11 @@ class FourAct(NarrativeStructure):
             display_name=self.display_name
         )
 
-        # Создаем краткое описание анализа
-        summary = "Analysis of narrative structure using Four-Act Structure"
+        summary = ("Анализ нарративной структуры по четырехактной модели" 
+                  if lang == 'ru' else 
+                  "Analysis of narrative structure using Four-Act Structure")
         
-        # Создаем визуализацию
-        visualization = self.visualize(structure)
+        visualization = self.visualize(structure, lang)
         
         return AnalysisResult(
             structure=structure,
@@ -138,92 +171,124 @@ class FourAct(NarrativeStructure):
             metadata=metadata
         )
 
-    def _analyze_act(self, act: Act, content: str) -> dict:
+    def _analyze_act(self, act: Act, content: str, lang: str = 'en') -> dict:
         """
         Analyze a single act based on its criteria and content.
         
         Args:
             act: Act object containing analysis criteria
             content: Content to analyze
+            lang: Language for analysis ('en' or 'ru')
             
         Returns:
             dict: Analysis results for the act
         """
         analysis = {
-            "name": act.name,
-            "description": act.description,
+            "name": act.name if lang == 'ru' else act.name_en,
+            "description": act.description if lang == 'ru' else act.description_en,
             "elements_present": [],
             "elements_missing": [],
             "suggestions": []
         }
 
         content_lower = content.lower()
+        elements = act.key_elements if lang == 'ru' else act.key_elements_en
         
-        for element in act.key_elements:
+        for element in elements:
             if element.lower() in content_lower:
                 analysis["elements_present"].append(element)
             else:
                 analysis["elements_missing"].append(element)
-                analysis["suggestions"].append(f"Consider emphasizing {element}")
+                suggestion = f"Рекомендуется усилить {element}" if lang == 'ru' else f"Consider emphasizing {element}"
+                analysis["suggestions"].append(suggestion)
 
         return analysis
 
-    def _perform_initial_analysis(self, text: str) -> dict:
+    def _perform_initial_analysis(self, text: str, lang: str = 'en') -> dict:
         """Perform initial analysis of the structure."""
-        # В реальной реализации здесь должен быть анализ текста по актам
         return {
-            act_key: self._analyze_act(act_data, text)
+            act_key: self._analyze_act(act_data, text, lang)
             for act_key, act_data in self.ACTS.items()
         }
 
-    def _double_check_analysis(self, text: str, initial_analysis: dict) -> dict:
+    def _double_check_analysis(self, text: str, initial_analysis: dict, lang: str = 'en') -> dict:
         """Perform secondary analysis for verification."""
         return {
-            "verification_status": "completed",
+            "verification_status": "завершено" if lang == 'ru' else "completed",
             "additional_insights": [],
             "improvement_suggestions": []
         }
 
-    def get_prompt(self) -> str:
-        """Generate analysis prompt template."""
-        return "\n".join([
-            "Analyze the following narrative structure based on the Four-Act Structure:",
-            "",
-            *[f"{act.name} ({act.description}):" + "\n{" + act.name + "}\n"
-              for act in self.ACTS.values()],
-            "",
-            "Evaluation Criteria:",
-            *[f"- {act.name}: {', '.join(act.analysis_criteria)}"
-              for act in self.ACTS.values()]
-        ])
+    def get_prompt(self, lang: str = 'en') -> str:
+        """
+        Generate analysis prompt template.
+        
+        Args:
+            lang: Language for the prompt ('en' or 'ru')
+        """
+        if lang == 'ru':
+            return "\n".join([
+                "Проанализируйте следующую нарративную структуру на основе четырехактной модели:",
+                "",
+                *[f"{act.name} ({act.description}):" + "\n{" + act.name + "}\n"
+                  for act in self.ACTS.values()],
+                "",
+                "Критерии оценки:",
+                *[f"- {act.name}: {', '.join(act.analysis_criteria)}"
+                  for act in self.ACTS.values()]
+            ])
+        else:
+            return "\n".join([
+                "Analyze the following narrative structure based on the Four-Act Structure:",
+                "",
+                *[f"{act.name_en} ({act.description_en}):" + "\n{" + act.name_en + "}\n"
+                  for act in self.ACTS.values()],
+                "",
+                "Evaluation Criteria:",
+                *[f"- {act.name_en}: {', '.join(act.analysis_criteria_en)}"
+                  for act in self.ACTS.values()]
+            ])
 
-    def visualize(self, analysis_result: dict) -> str:
-        """Generate HTML visualization of the analysis."""
+    def visualize(self, analysis_result: dict, lang: str = 'en') -> str:
+        """
+        Generate HTML visualization of the analysis.
+        
+        Args:
+            analysis_result: Analysis results to visualize
+            lang: Language for visualization ('en' or 'ru')
+        """
+        title = "Анализ четырехактной структуры" if lang == 'ru' else "Four-Act Structure Analysis"
+        
         html_parts = [
             "<div class='four-act-structure'>",
-            "<h2>Four-Act Structure Analysis</h2>"
+            f"<h2>{title}</h2>"
         ]
 
-        # Добавляем секции для каждого акта
         for act_key, act_data in self.ACTS.items():
             analysis = analysis_result.get(act_key, {})
+            act_name = act_data.name if lang == 'ru' else act_data.name_en
+            act_desc = act_data.description if lang == 'ru' else act_data.description_en
+            
+            present_label = "Присутствует" if lang == 'ru' else "Present"
+            missing_label = "Отсутствует" if lang == 'ru' else "Missing"
+            
             html_parts.extend([
                 f"<div class='act'>",
-                f"<h3>{act_data.name}: {act_data.description}</h3>",
+                f"<h3>{act_name}: {act_desc}</h3>",
                 "<ul>",
-                *[f"<li>Present: {element}</li>" 
+                *[f"<li>{present_label}: {element}</li>" 
                   for element in analysis.get('elements_present', [])],
-                *[f"<li>Missing: {element}</li>" 
+                *[f"<li>{missing_label}: {element}</li>" 
                   for element in analysis.get('elements_missing', [])],
                 "</ul>",
                 "</div>"
             ])
 
-        # Добавляем секцию double-check
         if "double_check" in analysis_result:
+            verification_title = "Результаты проверки" if lang == 'ru' else "Verification Results"
             html_parts.extend([
                 "<div class='double-check'>",
-                "<h3>Verification Results</h3>",
+                f"<h3>{verification_title}</h3>",
                 f"<p>{analysis_result['double_check']}</p>",
                 "</div>"
             ])

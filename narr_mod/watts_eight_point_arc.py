@@ -14,9 +14,12 @@ class ArcPhase(Enum):
 class ArcPoint:
     number: int
     name: str
+    name_ru: str
     phase: ArcPhase
     description: str
+    description_ru: str
     keywords: List[str]
+    keywords_ru: List[str]
     importance: int  # 1-10
     color: str
     expected_length: float  # процент от общей длины
@@ -36,18 +39,32 @@ class WattsEightPointArc(NarrativeStructure):
     def structure_type(self) -> StructureType:
         return StructureType.WATTS_EIGHT_POINT
 
-    # Константы
-    MIN_POINT_LENGTH: Final[int] = 500  # минимальная длина точки в символах
+    MIN_POINT_LENGTH: Final[int] = 500
     TOTAL_POINTS: Final[int] = 8
 
-    # Определение структуры арки
+    PHASE_NAMES = {
+        'ru': {
+            ArcPhase.BEGINNING: "Начало",
+            ArcPhase.MIDDLE: "Середина",
+            ArcPhase.END: "Конец"
+        },
+        'en': {
+            ArcPhase.BEGINNING: "Beginning",
+            ArcPhase.MIDDLE: "Middle",
+            ArcPhase.END: "End"
+        }
+    }
+
     POINTS: ClassVar[List[ArcPoint]] = [
         ArcPoint(
             1,
             "Stasis",
+            "Статичность",
             ArcPhase.BEGINNING,
             "Initial equilibrium before the story begins",
+            "Начальное равновесие перед началом истории",
             ["normal", "everyday", "routine", "balance", "ordinary"],
+            ["обычный", "повседневный", "рутина", "равновесие", "обыденный"],
             8,
             "#e6f3ff",
             0.1
@@ -55,9 +72,12 @@ class WattsEightPointArc(NarrativeStructure):
         ArcPoint(
             2,
             "Trigger",
+            "Триггер",
             ArcPhase.BEGINNING,
             "Event that disrupts the stasis",
+            "Событие, нарушающее равновесие",
             ["disruption", "change", "catalyst", "incident", "trigger"],
+            ["нарушение", "изменение", "катализатор", "происшествие", "триггер"],
             9,
             "#ffebcc",
             0.1
@@ -65,9 +85,12 @@ class WattsEightPointArc(NarrativeStructure):
         ArcPoint(
             3,
             "Quest",
+            "Поиск",
             ArcPhase.MIDDLE,
             "Protagonist's journey begins",
+            "Начало пути протагониста",
             ["journey", "goal", "mission", "pursuit", "objective"],
+            ["путь", "цель", "миссия", "стремление", "задача"],
             9,
             "#e6ffe6",
             0.15
@@ -75,9 +98,12 @@ class WattsEightPointArc(NarrativeStructure):
         ArcPoint(
             4,
             "Surprise",
+            "Сюрприз",
             ArcPhase.MIDDLE,
             "Unexpected developments",
+            "Неожиданные повороты",
             ["unexpected", "twist", "revelation", "shock", "discovery"],
+            ["неожиданность", "поворот", "откровение", "шок", "открытие"],
             8,
             "#ffe6e6",
             0.15
@@ -85,9 +111,12 @@ class WattsEightPointArc(NarrativeStructure):
         ArcPoint(
             5,
             "Critical Choice",
+            "Критический выбор",
             ArcPhase.MIDDLE,
             "Key decision point",
+            "Ключевой момент принятия решения",
             ["decision", "choice", "dilemma", "crossroads", "turning"],
+            ["решение", "выбор", "дилемма", "перепутье", "поворот"],
             10,
             "#fff2cc",
             0.15
@@ -95,9 +124,12 @@ class WattsEightPointArc(NarrativeStructure):
         ArcPoint(
             6,
             "Climax",
+            "Кульминация",
             ArcPhase.MIDDLE,
             "Height of conflict",
+            "Пик конфликта",
             ["climax", "confrontation", "peak", "crisis", "showdown"],
+            ["кульминация", "противостояние", "пик", "кризис", "развязка"],
             10,
             "#ffcccc",
             0.15
@@ -105,9 +137,12 @@ class WattsEightPointArc(NarrativeStructure):
         ArcPoint(
             7,
             "Reversal",
+            "Реверс",
             ArcPhase.END,
             "Consequences of the climax",
+            "Последствия кульминации",
             ["aftermath", "change", "consequence", "effect", "result"],
+            ["последствия", "изменение", "результат", "эффект", "итог"],
             8,
             "#e6f2ff",
             0.1
@@ -115,9 +150,12 @@ class WattsEightPointArc(NarrativeStructure):
         ArcPoint(
             8,
             "Resolution",
+            "Разрешение",
             ArcPhase.END,
             "New equilibrium",
+            "Новое равновесие",
             ["resolution", "conclusion", "ending", "closure", "settlement"],
+            ["разрешение", "заключение", "конец", "завершение", "урегулирование"],
             9,
             "#f2e6ff",
             0.1
@@ -192,34 +230,32 @@ class WattsEightPointArc(NarrativeStructure):
         }
     """
 
-    def analyze(self, text: str) -> BaseAnalysisResult:
+    def analyze(self, text: str, lang: str = 'en') -> BaseAnalysisResult:
         """
         Analyze the narrative structure according to Watts' Eight-Point Arc.
         
         Args:
             text: Input text to analyze
+            lang: Language code ('en' or 'ru')
             
         Returns:
             BaseAnalysisResult: Analysis results with detailed evaluation
         """
-
-        # Разбиваем текст на части
         formatted_structure = self._split_into_points(text)
         
-        # Анализируем структуру
         analysis = {
             "points": {},
             "phases": {
-                phase.value: self._analyze_phase(phase, formatted_structure)
+                self.PHASE_NAMES[lang][phase]: self._analyze_phase(phase, formatted_structure)
                 for phase in ArcPhase
             },
             "overall": self._analyze_overall_structure(formatted_structure)
         }
 
         for point in self.POINTS:
-            analysis["points"][point.name] = self._analyze_point(point, formatted_structure)
+            point_name = point.name if lang == 'en' else point.name_ru
+            analysis["points"][point_name] = self._analyze_point(point, formatted_structure, lang)
 
-        # Создаем метаданные
         metadata = AnalysisMetadata(
             model_name="gpt-4",
             model_version="1.0",
@@ -229,11 +265,11 @@ class WattsEightPointArc(NarrativeStructure):
             display_name=self.display_name
         )
 
-        # Создаем краткое описание
-        summary = "Analysis of narrative using Watts' Eight-Point Arc"
+        summary = ("Анализ повествования по восьмиточечной арке Уоттса" 
+                if lang == 'ru' else 
+                "Analysis of narrative using Watts' Eight-Point Arc")
 
-        # Создаем визуализацию
-        visualization = self.visualize(analysis)
+        visualization = self.visualize(analysis, lang)
 
         return BaseAnalysisResult(
             structure=analysis,
@@ -241,12 +277,11 @@ class WattsEightPointArc(NarrativeStructure):
             visualization=visualization,
             metadata=metadata
         )
-    
+
     def _split_into_points(self, text: str) -> Dict[str, str]:
         """Split the text into points based on expected lengths."""
         points_content = {}
         
-        # Проверка на пустой текст
         if not text:
             return {point.name.lower().replace(" ", "_"): "" 
                     for point in self.POINTS}
@@ -256,23 +291,16 @@ class WattsEightPointArc(NarrativeStructure):
         
         for point in self.POINTS:
             point_key = point.name.lower().replace(" ", "_")
-            
-            # Вычисляем длину для текущей точки
             point_length = max(1, int(total_length * point.expected_length))
             end_pos = min(current_pos + point_length, total_length)
             
-            # Если мы достигли конца текста, оставшийся текст идет в текущую точку
             if current_pos >= total_length:
                 points_content[point_key] = ""
             else:
-                # Ищем ближайший конец предложения или абзаца
                 text_chunk = text[current_pos:end_pos]
-                
-                # Пытаемся найти естественную границу
                 sentence_end = text_chunk.rfind('. ')
                 paragraph_end = text_chunk.rfind('\n')
                 
-                # Используем наиболее подходящую границу
                 if sentence_end > 0:
                     end_pos = current_pos + sentence_end + 1
                 elif paragraph_end > 0:
@@ -283,33 +311,49 @@ class WattsEightPointArc(NarrativeStructure):
                 
         return points_content
 
-    def _analyze_point(self, point: ArcPoint, content: dict) -> PointAnalysis:
+    def _analyze_point(self, point: ArcPoint, content: dict, lang: str = 'en') -> PointAnalysis:
         """Analyze a single point of the arc."""
         point_content = content.get(point.name.lower().replace(" ", "_"), "")
         
+        keywords = point.keywords if lang == 'en' else point.keywords_ru
+        point_name = point.name if lang == 'en' else point.name_ru
+        
         keywords_found = {
             keyword: keyword.lower() in point_content.lower()
-            for keyword in point.keywords
+            for keyword in keywords
         }
         
         strengths = []
         weaknesses = []
         suggestions = []
         
-        # Анализ наличия ключевых слов
         found_keywords = sum(keywords_found.values())
-        if found_keywords >= len(point.keywords) * 0.7:
-            strengths.append(f"Strong presence of {point.name} elements")
+        if found_keywords >= len(keywords) * 0.7:
+            strengths.append(
+                f"Сильное присутствие элементов {point_name}" if lang == 'ru'
+                else f"Strong presence of {point_name} elements"
+            )
         else:
-            weaknesses.append(f"Weak representation of {point.name}")
-            suggestions.append(f"Consider strengthening {point.name} by incorporating more relevant elements")
+            weaknesses.append(
+                f"Слабое представление {point_name}" if lang == 'ru'
+                else f"Weak representation of {point_name}"
+            )
+            suggestions.append(
+                f"Рекомендуется усилить {point_name}, добавив больше релевантных элементов" if lang == 'ru'
+                else f"Consider strengthening {point_name} by incorporating more relevant elements"
+            )
 
-        # Анализ длины содержания
         if len(point_content) < self.MIN_POINT_LENGTH:
-            weaknesses.append(f"{point.name} seems underdeveloped")
-            suggestions.append(f"Expand the {point.name} section")
+            weaknesses.append(
+                f"{point_name} недостаточно развит" if lang == 'ru'
+                else f"{point_name} seems underdeveloped"
+            )
+            suggestions.append(
+                f"Расширьте раздел {point_name}" if lang == 'ru'
+                else f"Expand the {point_name} section"
+            )
 
-        score = found_keywords / len(point.keywords)
+        score = found_keywords / len(keywords)
 
         return PointAnalysis(
             strengths=strengths,
@@ -331,13 +375,13 @@ class WattsEightPointArc(NarrativeStructure):
             "length": len(phase_content),
             "points_count": len(phase_points),
             "balance": len(phase_content) / sum(len(content.get(p.name.lower().replace(" ", "_"), ""))
-                                              for p in self.POINTS)
+                                            for p in self.POINTS)
         }
 
     def _analyze_overall_structure(self, content: dict) -> dict:
         """Analyze the overall structure balance and effectiveness."""
         total_length = sum(len(content.get(p.name.lower().replace(" ", "_"), ""))
-                          for p in self.POINTS)
+                        for p in self.POINTS)
         
         return {
             "total_length": total_length,
@@ -345,61 +389,10 @@ class WattsEightPointArc(NarrativeStructure):
             "progression_score": self._calculate_progression_score(content)
         }
 
-    def visualize(self, analysis_result: dict) -> str:
-        """
-        Generate HTML visualization of the Eight-Point Arc.
-        
-        Args:
-            analysis_result: Dictionary containing analysis results
-            
-        Returns:
-            str: HTML representation of the arc
-        """
-        html_parts = [
-            "<div class='watts-arc'>",
-            "<h2>Eight-Point Arc Analysis</h2>",
-            "<div class='arc-timeline'>"
-        ]
-
-        for point in self.POINTS:
-            point_analysis = analysis_result.get("points", {}).get(point.name, {})
-            score = point_analysis.get("score", 0)
-            
-            html_parts.append(f"""
-                <div class='arc-point' style='background-color: {point.color}'>
-                    <div class='point-number'>{point.number}</div>
-                    <div class='point-content'>
-                        <div class='point-name'>{point.name}</div>
-                        <div class='point-description'>{point.description}</div>
-                        <div class='point-stats'>
-                            <div class='score'>Score: {score:.2f}</div>
-                            <div class='keywords-found'>
-                                {self._generate_keywords_html(point_analysis.get("keywords_found", {}))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            """)
-
-        html_parts.extend([
-            "</div>",  # close arc-timeline
-            "</div>",  # close watts-arc
-            f"<style>{self.CSS_TEMPLATE}</style>"
-        ])
-
-        return "\n".join(html_parts)
-
-    def _generate_keywords_html(self, keywords_found: Dict[str, bool]) -> str:
-        """Generate HTML for keywords display."""
-        return "".join(
-            f"<span class='keyword {('found' if found else '')}'>{keyword}</span>"
-            for keyword, found in keywords_found.items()
-        )
-    
     def _calculate_balance_score(self, content: dict) -> float:
         """Calculate the balance score for the overall structure."""
         total_length = sum(len(content.get(p.name.lower().replace(" ", "_"), ""))
-                          for p in self.POINTS)
+                        for p in self.POINTS)
         
         if total_length == 0:
             return 0.0
@@ -415,39 +408,122 @@ class WattsEightPointArc(NarrativeStructure):
         return 1.0 - (sum(deviations) / len(deviations))
 
     def _calculate_progression_score(self, content: dict) -> float:
-        """Calculate how well the narrative progresses through the points."""
-        scores = []
-        for i in range(len(self.POINTS) - 1):
-            current_point = self.POINTS[i]
-            next_point = self.POINTS[i + 1]
-            
-            current_content = content.get(current_point.name.lower().replace(" ", "_"), "")
-            next_content = content.get(next_point.name.lower().replace(" ", "_"), "")
-            
-            # Простая метрика: насколько хорошо точки связаны между собой
-            transition_score = 0.8  # placeholder
-            scores.append(transition_score)
-            
-        return sum(scores) / len(scores) if scores else 0.0
+            """Calculate how well the narrative progresses through the points."""
+            scores = []
+            for i in range(len(self.POINTS) - 1):
+                current_point = self.POINTS[i]
+                next_point = self.POINTS[i + 1]
+                
+                current_content = content.get(current_point.name.lower().replace(" ", "_"), "")
+                next_content = content.get(next_point.name.lower().replace(" ", "_"), "")
+                
+                # Проверяем связность между точками
+                transition_score = self._analyze_transition(current_content, next_content)
+                scores.append(transition_score)
+                
+            return sum(scores) / len(scores) if scores else 0.0
 
-    def get_prompt(self) -> str:
-        """Generate analysis prompt for the Eight-Point Arc."""
-        prompt_parts = [
-            "Analyze the following narrative structure based on Nigel Watts' Eight-Point Arc:\n"
+    def _analyze_transition(self, current_content: str, next_content: str) -> float:
+        """
+        Analyze transition between two points.
+        Returns a score between 0 and 1.
+        """
+        if not current_content or not next_content:
+            return 0.0
+        
+        # Простой анализ связности на основе общих слов
+        current_words = set(current_content.lower().split())
+        next_words = set(next_content.lower().split())
+        
+        common_words = current_words.intersection(next_words)
+        total_words = current_words.union(next_words)
+        
+        if not total_words:
+            return 0.0
+        
+        return len(common_words) / len(total_words)
+
+    def visualize(self, analysis_result: dict, lang: str = 'en') -> str:
+        """Generate HTML visualization of the Eight-Point Arc."""
+        title = "Анализ восьмиточечной арки" if lang == 'ru' else "Eight-Point Arc Analysis"
+        
+        html_parts = [
+            "<div class='watts-arc'>",
+            f"<h2>{title}</h2>",
+            "<div class='arc-timeline'>"
         ]
+
+        for point in self.POINTS:
+            point_name = point.name if lang == 'en' else point.name_ru
+            point_desc = point.description if lang == 'en' else point.description_ru
+            point_analysis = analysis_result.get("points", {}).get(point_name, {})
+            score = point_analysis.get("score", 0)
+            
+            score_text = "Оценка" if lang == 'ru' else "Score"
+            
+            html_parts.append(f"""
+                <div class='arc-point' style='background-color: {point.color}'>
+                    <div class='point-number'>{point.number}</div>
+                    <div class='point-content'>
+                        <div class='point-name'>{point_name}</div>
+                        <div class='point-description'>{point_desc}</div>
+                        <div class='point-stats'>
+                            <div class='score'>{score_text}: {score:.2f}</div>
+                            <div class='keywords-found'>
+                                {self._generate_keywords_html(point_analysis.get("keywords_found", {}))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            """)
+
+        html_parts.extend([
+            "</div>",
+            "</div>",
+            f"<style>{self.CSS_TEMPLATE}</style>"
+        ])
+
+        return "\n".join(html_parts)
+
+    def _generate_keywords_html(self, keywords_found: Dict[str, bool]) -> str:
+        """Generate HTML for keywords display."""
+        return "".join(
+            f"<span class='keyword {('found' if found else '')}'>{keyword}</span>"
+            for keyword, found in keywords_found.items()
+        )
+
+    def get_prompt(self, lang: str = 'en') -> str:
+        """Generate analysis prompt for the Eight-Point Arc."""
+        if lang == 'ru':
+            prompt_parts = [
+                "Проанализируйте следующую нарративную структуру на основе восьмиточечной арки Найджела Уоттса:\n"
+            ]
+        else:
+            prompt_parts = [
+                "Analyze the following narrative structure based on Nigel Watts' Eight-Point Arc:\n"
+            ]
 
         current_phase = None
         for point in self.POINTS:
             if point.phase != current_phase:
                 current_phase = point.phase
-                prompt_parts.append(f"\n{current_phase.value}:")
+                phase_name = self.PHASE_NAMES[lang][current_phase]
+                prompt_parts.append(f"\n{phase_name}:")
+            
+            point_name = point.name if lang == 'en' else point.name_ru
+            point_desc = point.description if lang == 'en' else point.description_ru
+            keywords = point.keywords if lang == 'en' else point.keywords_ru
+            
+            desc_label = "Описание" if lang == 'ru' else "Description"
+            importance_label = "Важность" if lang == 'ru' else "Importance"
+            elements_label = "Ключевые элементы" if lang == 'ru' else "Key elements to look for"
             
             prompt_parts.extend([
-                f"\n{point.number}. {point.name}",
-                f"   Description: {point.description}",
-                f"   Importance: {point.importance}/10",
-                "   Key elements to look for:",
-                "   " + ", ".join(point.keywords)
+                f"\n{point.number}. {point_name}",
+                f"   {desc_label}: {point_desc}",
+                f"   {importance_label}: {point.importance}/10",
+                f"   {elements_label}:",
+                "   " + ", ".join(keywords)
             ])
 
         return "\n".join(prompt_parts)

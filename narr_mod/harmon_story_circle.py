@@ -9,15 +9,17 @@ from narr_mod import NarrativeStructure, StructureType, AnalysisResult, Analysis
 class StoryStep:
     number: int
     name: str
+    name_en: str
     description: str
+    description_en: str
     color: str
     act: str
     analysis_criteria: List[str]
+    analysis_criteria_en: List[str]
 
 class HarmonStoryCircle(NarrativeStructure):
     """Implementation of Dan Harmon's Story Circle narrative structure."""
 
-    # Добавляем реализацию абстрактного метода structure_type
     @property
     def structure_type(self) -> StructureType:
         return StructureType.HARMON_CIRCLE
@@ -30,59 +32,67 @@ class HarmonStoryCircle(NarrativeStructure):
     # Определение шагов
     STORY_STEPS: ClassVar[List[StoryStep]] = [
         StoryStep(
-            1, "Зона комфорта", 
-            "Comfort Zone",
+            1, "Зона комфорта", "Comfort Zone",
+            "Привычный мир героя", "Character's familiar world",
             "#e74c3c",
             ACT_BEGINNING,
+            ["установление персонажа", "начальное состояние мира", "статус-кво"],
             ["character establishment", "initial world state", "status quo"]
         ),
         StoryStep(
-            2, "Потребность или желание",
-            "Need or Desire",
+            2, "Потребность или желание", "Need or Desire",
+            "Возникновение потребности", "Emergence of need",
             "#3498db",
             ACT_BEGINNING,
+            ["ясность мотивации", "установление ставок", "определение цели"],
             ["motivation clarity", "stakes establishment", "goal definition"]
         ),
         StoryStep(
-            3, "Незнакомая ситуация",
-            "Unfamiliar Situation",
+            3, "Незнакомая ситуация", "Unfamiliar Situation",
+            "Выход из зоны комфорта", "Leaving comfort zone",
             "#2ecc71",
             ACT_MIDDLE,
+            ["уход из зоны комфорта", "новые вызовы", "начальная адаптация"],
             ["comfort zone departure", "new challenges", "initial adaptation"]
         ),
         StoryStep(
-            4, "Поиск и адаптация",
-            "Search and Adaptation",
+            4, "Поиск и адаптация", "Search and Adaptation",
+            "Приспособление к новому", "Adapting to new",
             "#f39c12",
             ACT_MIDDLE,
+            ["преодоление испытаний", "развитие навыков", "исследование мира"],
             ["challenge handling", "skill development", "world exploration"]
         ),
         StoryStep(
-            5, "Получение желаемого",
-            "Getting What They Wanted",
+            5, "Получение желаемого", "Getting What They Wanted",
+            "Достижение цели", "Goal achievement",
             "#9b59b6",
             ACT_MIDDLE,
+            ["достижение цели", "осознание цены", "понимание последствий"],
             ["goal achievement", "price recognition", "consequence understanding"]
         ),
         StoryStep(
-            6, "Плата за него",
-            "Paying the Price",
+            6, "Плата за него", "Paying the Price",
+            "Расплата за достижение", "Price for achievement",
             "#e67e22",
             ACT_MIDDLE,
+            ["измерение жертвы", "оценка стоимости", "катализатор изменений"],
             ["sacrifice measurement", "cost evaluation", "change catalyst"]
         ),
         StoryStep(
-            7, "Возвращение к привычному",
-            "Return to Familiar",
+            7, "Возвращение к привычному", "Return to Familiar",
+            "Возвращение домой", "Return home",
             "#1abc9c",
             ACT_END,
+            ["интеграция изменений", "сравнение миров", "осознание роста"],
             ["integration of change", "world comparison", "growth recognition"]
         ),
         StoryStep(
-            8, "Способность меняться",
-            "Changed State",
+            8, "Способность меняться", "Changed State",
+            "Трансформация героя", "Character transformation",
             "#34495e",
             ACT_END,
+            ["эволюция персонажа", "применение урока", "новая норма"],
             ["character evolution", "lesson application", "new normal"]
         )
     ]
@@ -130,25 +140,26 @@ class HarmonStoryCircle(NarrativeStructure):
         }
     """
 
-    def analyze(self, text: str) -> AnalysisResult:
+    def analyze(self, text: str, lang: str = 'en') -> AnalysisResult:
         """
         Analyze the narrative structure according to Harmon's Story Circle.
         
         Args:
             text: Input text to analyze
+            lang: Language for analysis ('en' or 'ru')
             
         Returns:
             AnalysisResult: Analysis results with step evaluation
         """
         structure = {
             "steps": {
-                step.name: self._analyze_step(step, text)
+                (step.name if lang == 'ru' else step.name_en): 
+                self._analyze_step(step, text, lang)
                 for step in self.STORY_STEPS
             },
-            "overall_evaluation": self._evaluate_overall_structure(text)
+            "overall_evaluation": self._evaluate_overall_structure(text, lang)
         }
         
-        # Создаем метаданные
         metadata = AnalysisMetadata(
             model_name="gpt-4",
             model_version="1.0",
@@ -158,11 +169,11 @@ class HarmonStoryCircle(NarrativeStructure):
             display_name=self.display_name
         )
         
-        # Создаем краткое описание анализа
-        summary = "Analysis of narrative structure using Harmon's Story Circle"
+        summary = ("Анализ нарративной структуры по методу сюжетного круга Дэна Хармона" 
+                  if lang == 'ru' else 
+                  "Analysis of narrative structure using Harmon's Story Circle")
         
-        # Создаем визуализацию
-        visualization = self.visualize(structure)
+        visualization = self.visualize(structure, lang)
         
         return AnalysisResult(
             structure=structure,
@@ -171,34 +182,42 @@ class HarmonStoryCircle(NarrativeStructure):
             metadata=metadata
         )
 
-    def _analyze_step(self, step: StoryStep, text: str) -> dict:
+    def _analyze_step(self, step: StoryStep, text: str, lang: str = 'en') -> dict:
         """
         Analyze a single step of the Story Circle.
         
         Args:
             step: Story step to analyze
             text: Input text to analyze
+            lang: Language for analysis ('en' or 'ru')
             
         Returns:
             dict: Analysis results for the step
         """
         return {
             "presence": True,  # В реальной реализации здесь должен быть анализ текста
-            "strength": "medium",
+            "strength": "средний" if lang == 'ru' else "medium",
             "suggestions": [],
-            "criteria_met": step.analysis_criteria
+            "criteria_met": step.analysis_criteria if lang == 'ru' else step.analysis_criteria_en
         }
 
-    def _evaluate_overall_structure(self, text: str) -> dict:
+    def _evaluate_overall_structure(self, text: str, lang: str = 'en') -> dict:
         """
         Evaluate the overall narrative structure.
         
         Args:
             text: Input text to analyze
+            lang: Language for evaluation ('en' or 'ru')
             
         Returns:
             dict: Overall evaluation results
         """
+        if lang == 'ru':
+            return {
+                "завершенность_круга": True,
+                "баланс": "хорошо_сбалансирован",
+                "предложения": []
+            }
         return {
             "circle_completion": True,
             "balance": "well_balanced",
@@ -221,39 +240,43 @@ class HarmonStoryCircle(NarrativeStructure):
         y = radius * sin(angle)
         return (x, y)
 
-    def visualize(self, analysis_result: dict) -> str:
+    def visualize(self, analysis_result: dict, lang: str = 'en') -> str:
         """
         Generate HTML visualization of the Story Circle.
         
         Args:
             analysis_result: Dictionary containing analysis results
+            lang: Language for visualization ('en' or 'ru')
             
         Returns:
             str: HTML representation of the circle
         """
+        title = ("Сюжетный круг (Дэн Хармон)" if lang == 'ru' 
+                else "Story Circle (Dan Harmon)")
+        center_text = "Сюжетный<br>круг" if lang == 'ru' else "Story<br>Circle"
+        
         html_parts = [
-            "<h1>Сюжетный круг (Дэн Хармон)</h1>",
+            f"<h1>{title}</h1>",
             "<div class='harmon-circle'>"
         ]
 
-        # Добавляем шаги
         for step in self.STORY_STEPS:
             x, y = self._calculate_step_position(step.number)
             angle = (step.number - 1) * 45 - 90
+            step_name = step.name if lang == 'ru' else step.name_en
             
             html_parts.extend([
                 f"<div class='step step-{step.number}' style='",
                 f"transform: rotate({angle}deg) translate({x}px, {y}px) rotate(-{angle}deg);",
                 f"color: {step.color};'>",
                 f"<div class='step-number'>{step.number}</div>",
-                f"<div class='step-name'>{step.name}</div>",
+                f"<div class='step-name'>{step_name}</div>",
                 "</div>"
             ])
 
-        # Добавляем центр круга
         html_parts.extend([
             "<div class='circle-center'>",
-            "Story<br>Circle",
+            center_text,
             "</div>",
             "</div>",
             f"<style>{self.CSS_TEMPLATE}</style>"
@@ -261,19 +284,35 @@ class HarmonStoryCircle(NarrativeStructure):
 
         return "\n".join(html_parts)
 
-    def get_prompt(self) -> str:
-        """Generate analysis prompt for Story Circle structure."""
-        prompt_parts = [
-            "Analyze the following narrative structure based on Dan Harmon's Story Circle:\n"
-        ]
+    def get_prompt(self, lang: str = 'en') -> str:
+        """
+        Generate analysis prompt for Story Circle structure.
+        
+        Args:
+            lang: Language for the prompt ('en' or 'ru')
+        """
+        if lang == 'ru':
+            prompt_parts = [
+                "Проанализируйте следующую нарративную структуру на основе сюжетного круга Дэна Хармона:\n"
+            ]
+        else:
+            prompt_parts = [
+                "Analyze the following narrative structure based on Dan Harmon's Story Circle:\n"
+            ]
 
         current_act = None
         for step in self.STORY_STEPS:
             if step.act != current_act:
                 current_act = step.act
-                prompt_parts.append(f"\nAct - {current_act}:")
+                act_text = f"\nАкт - {current_act}:" if lang == 'ru' else f"\nAct - {current_act}:"
+                prompt_parts.append(act_text)
             
-            prompt_parts.append(f"{step.number}. {step.name} ({step.description})")
-            prompt_parts.append("   Criteria: " + ", ".join(step.analysis_criteria))
+            step_name = step.name if lang == 'ru' else step.name_en
+            step_desc = step.description if lang == 'ru' else step.description_en
+            criteria = step.analysis_criteria if lang == 'ru' else step.analysis_criteria_en
+            
+            prompt_parts.append(f"{step.number}. {step_name} ({step_desc})")
+            criteria_label = "   Критерии: " if lang == 'ru' else "   Criteria: "
+            prompt_parts.append(criteria_label + ", ".join(criteria))
 
         return "\n".join(prompt_parts)

@@ -25,16 +25,16 @@ class StructureType(str, Enum):
     def get_display_name(cls, value: str) -> str:
         """Получить человекочитаемое название структуры"""
         display_names = {
-            cls.WATTS_EIGHT_POINT.value: "Eight Point Arc (Nigel Watts)",
-            cls.VOGLER_HERO_JOURNEY.value: "Hero's journey (Chris Vogler)",
-            cls.FOUR_ACT.value: "Four-Act Structure",
-            cls.FIELD_PARADIGM.value: "Paradigm (Sid Field)",
-            cls.THREE_ACT.value: "Three-Act Structure",
-            cls.MONOMYTH.value: "The Monomyth (Joseph Campbell)",
-            cls.SOTH_STRUCTURE.value: "The Structure of Story (Chris Soth)",
-            cls.HARMON_CIRCLE.value: "Story Circle (Dan Harmon)",
-            cls.GULINO_SEQUENCE.value: "Consistent Approach (Paul Gulino)",
-            cls.AUTO_DETECT.value: "Auto Detect"
+            cls.WATTS_EIGHT_POINT.value: "Eight Point Arc (Nigel Watts) - 8-точечная арка Найджела Уоттса",
+            cls.VOGLER_HERO_JOURNEY.value: "Hero's journey (Chris Vogler) - Путь героя Криса Воглера",
+            cls.FOUR_ACT.value: "Four-Act Structure - 4-актная структура",
+            cls.FIELD_PARADIGM.value: "Paradigm (Sid Field) - Парадигма Сида Филда",
+            cls.THREE_ACT.value: "Three-Act Structure - 3-актная структура",
+            cls.MONOMYTH.value: "The Monomyth (Joseph Campbell) - Мономиф Джозефа Кэмпбелла",
+            cls.SOTH_STRUCTURE.value: "The Structure of Story (Chris Soth) - Структура истории Криса Сота",
+            cls.HARMON_CIRCLE.value: "Story Circle (Dan Harmon) - Круг героя Дэна Хармона",
+            cls.GULINO_SEQUENCE.value: "Consistent Approach (Paul Gulino) - Последовательный подход Пола Гулино",
+            cls.AUTO_DETECT.value: "Auto Detect - Авто-определение"
         }
         return display_names.get(value, value)
 
