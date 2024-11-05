@@ -248,16 +248,16 @@ class LLMFactory:
     """Фабрика для создания экземпляров различных LLM моделей"""
     
     DEFAULT_MODELS = {
-        ModelType.OLLAMA: "llama2",
+        ModelType.OLLAMA: "llama3.2",
         ModelType.OPENAI: "gpt-4",
         ModelType.GIGACHAT: "GigaChat:latest",
         ModelType.ANTHROPIC: "claude-3-opus-20240229"
     }
 
     FALLBACK_CHAIN = {
-        ModelType.OLLAMA: ModelType.GIGACHAT,
-        ModelType.OPENAI: ModelType.GIGACHAT,
-        ModelType.ANTHROPIC: ModelType.GIGACHAT,
+        ModelType.OLLAMA: ModelType.OLLAMA,
+        # ModelType.OPENAI: ModelType.OPENAI,
+        # ModelType.ANTHROPIC: ModelType.ANTHROPIC,
         ModelType.GIGACHAT: None  # Конечная точка fallback
     }
 
@@ -266,7 +266,7 @@ class LLMFactory:
         """Проверяет доступность модели"""
         try:
             if model_type == ModelType.OLLAMA:
-                response = requests.get("http://localhost:11434/api/health", timeout=2)
+                response = requests.get("http://localhost:11434/", timeout=2)
                 return response.status_code == 200
             elif model_type == ModelType.GIGACHAT:
                 # Проверяем наличие переменных окружения
