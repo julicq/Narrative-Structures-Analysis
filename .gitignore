@@ -31,3 +31,5 @@ ENV/
 ehthumbs.db
 Thumbs.db
 .env
+
+user_data.json
