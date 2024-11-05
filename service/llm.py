@@ -44,6 +44,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def count_tokens(text: str) -> int:
+        """Примерный подсчет токенов в тексте"""
+        return len(text.split())  # Простой подсчет по словам
+
 class ModelType(str, Enum):
     """Поддерживаемые типы моделей"""
     OPENAI = auto()
@@ -113,7 +117,7 @@ class CustomGigaChat(BaseChatModel):
         
         # Получаем токен доступа
         self._get_access_token()
-
+    
     def _get_access_token(self) -> None:
         """Получение токена доступа"""
         response = None  # Инициализируем response здесь
@@ -196,7 +200,8 @@ class CustomGigaChat(BaseChatModel):
                 message = result['choices'][0]['message']
                 generation = ChatGeneration(
                     message=AIMessage(content=message['content']),
-                    generation_info={"finish_reason": result['choices'][0].get('finish_reason')}
+                    generation_info={"finish_reason": result['choices'][0].get('finish_reason'),
+                                     "tokens_used": result.get('usage', {}).get('total_tokens', count_tokens(message['content']))}
                 )
                 return ChatResult(generations=[generation])
             else:
@@ -440,3 +445,4 @@ def initialize_llm(
     """Инициализирует одиночную модель LLM с поддержкой fallback"""
     model, _ = LLMFactory.create_llm(model_type, model_name, **kwargs)
     return model
+

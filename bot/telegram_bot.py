@@ -3,6 +3,7 @@
 import os
 from typing import Dict, Any
 from dotenv import load_dotenv
+import json
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram import ReplyKeyboardMarkup, KeyboardButton
@@ -41,6 +42,10 @@ class TelegramBot:
         self._running = False
         self.evaluator = None
         self.user_states: Dict[int, Dict[str, Any]] = {}
+        self.user_data: Dict[int, Dict[str, Any]] = {}
+        self.DEFAULT_TOKEN_BALANCE = 100_000
+        self.PAGE_LIMIT = 50
+        self.TOKENS_PER_PAGE = 500
 
     def setup(self):
         """Синхронная инициализация бота"""
@@ -95,6 +100,10 @@ class TelegramBot:
         # Обработчик ошибок
         self.application.add_error_handler(self.error_handler)
 
+        # Баланс
+        self.application.add_handler(CommandHandler("balance", self.balance_command))
+        self.application.add_handler(CommandHandler("limits", self.limits_command))
+
     def run(self):
         """Синхронный метод запуска бота"""
         if not self._initialized:
@@ -102,6 +111,11 @@ class TelegramBot:
         
         logger.info("Starting bot...")
         self.application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+        try:
+            self.application.run_polling(allowed_updates=Update.ALL_TYPES)
+        finally:
+            self.save_user_data()
 
     async def start_polling(self):
         """Запуск бота"""
@@ -131,7 +145,10 @@ class TelegramBot:
             return
                 
         user = update.effective_user
+        user_id = update.effective_user.id
         chat_id = update.effective_chat.id
+        if user_id not in self.user_data:
+            self.user_data[user_id] = {"token_balance": self.DEFAULT_TOKEN_BALANCE}
         logger.info(f"Start command received from user {user.id} in chat {chat_id}")
         
         keyboard = self.get_main_keyboard()
@@ -140,6 +157,14 @@ class TelegramBot:
             "Я бот для анализа нарративных структур в сценариях.\n"
             "Выберите действие в нижнем меню или отправьте текст для анализа (имейте в виду, что в одном сообщении можно отправить максимум 4096 символов текста) - если сценарий большой, лучше прикрепить файл:",
             reply_markup=keyboard
+        )
+        # Добавим информацию о балансе и лимитах
+        balance = self.user_data[user_id]["token_balance"]
+        await update.message.reply_text(
+            f"{update.message.text}\n\n"
+            f"Ваш текущий баланс: {balance} токенов\n"
+            f"Лимит страниц на анализ: {self.PAGE_LIMIT}\n"
+            f"Используйте /balance для проверки баланса и /limits для просмотра лимитов."
         )
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -150,6 +175,8 @@ class TelegramBot:
             "2. Используйте команды:\n"
             "   /start - начать работу\n"
             "   /help - показать эту справку\n\n"
+            "   /balance - проверить текущий баланс токенов\n"
+            "   /limits - просмотреть текущие ограничения\n\n"
             "📄 *Поддерживаемые форматы файлов:*\n"
             "• TXT - текстовые файлы\n\n"
             "• DOC/DOCX - текстовые файлы\n\n"
@@ -157,6 +184,7 @@ class TelegramBot:
             "Вы также можете:\n"
             "• Выбрать конкретную структуру для анализа\n"
             "• Использовать автоопределение структуры"
+            "Обратите внимание на ограничения по количеству страниц и токенов."
         )
         await update.message.reply_text(
             help_text,
@@ -349,11 +377,42 @@ class TelegramBot:
                 "❌ Произошла ошибка при обработке файла. "
                 "Пожалуйста, убедитесь, что файл не поврежден и попробуйте снова."
             )
+    
+    async def balance_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+        balance = self.user_data[user_id]["token_balance"]
+        await update.message.reply_text(f"Ваш текущий баланс: {balance} токенов")
+
+    async def limits_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await update.message.reply_text(
+            f"Текущие лимиты:\n"
+            f"- Максимальное количество страниц на анализ: {self.PAGE_LIMIT}\n"
+            f"- Примерное количество токенов на страницу: {self.TOKENS_PER_PAGE}\n"
+            f"- Максимальное количество токенов на анализ: {self.PAGE_LIMIT * self.TOKENS_PER_PAGE}"
+        )
 
     async def process_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, structure: str):
         """Обработка текста и отправка результатов анализа"""
         chat_id = update.effective_chat.id
+        user_id = update.effective_user.id
         logger.info(f"Processing text for chat {chat_id} with structure {structure}")
+        
+        # Проверяем баланс токенов
+        if self.user_data[user_id]["token_balance"] <= 0:
+            await update.message.reply_text("У вас недостаточно токенов для анализа. Пожалуйста, обратитесь к администратору для пополнения баланса.")
+            return
+
+        # Оцениваем количество страниц и токенов
+        estimated_pages = len(text) // 1800  # Примерно 1800 символов на страницу
+        estimated_tokens = estimated_pages * self.TOKENS_PER_PAGE
+
+        if estimated_pages > self.PAGE_LIMIT:
+            await update.message.reply_text(f"Текст превышает установленный лимит в {self.PAGE_LIMIT} страниц. Текущий размер: примерно {estimated_pages} страниц.")
+            return
+
+        if estimated_tokens > self.user_data[user_id]["token_balance"]:
+            await update.message.reply_text(f"Недостаточно токенов для анализа. Требуется примерно {estimated_tokens} токенов, а у вас {self.user_data[user_id]['token_balance']}.")
+            return
         
         try:
             if structure == "Auto-detect":
@@ -370,6 +429,10 @@ class TelegramBot:
 
             try:
                 result = self.evaluator.analyze_specific_structure(text, structure)
+
+                # После анализа вычитаем токены
+                tokens_used = result.get('tokens_used', estimated_tokens)
+                self.user_data[user_id]["token_balance"] -= tokens_used
                 
                 # Проверяем наличие и тип результата
                 if not isinstance(result, dict):
@@ -390,6 +453,10 @@ class TelegramBot:
                 # Объединяем все части
                 response = '\n'.join(response_parts)
                 
+                # Добавляем информацию о токенах
+                response += f"\n\nИспользовано токенов: {tokens_used}\n"
+                response += f"Оставшийся баланс: {self.user_data[user_id]['token_balance']} токенов"
+
                 # Разбиваем длинные сообщения на части если необходимо
                 if len(response) > 4096:
                     for x in range(0, len(response), 4096):
@@ -402,6 +469,7 @@ class TelegramBot:
                         response,
                         parse_mode=ParseMode.HTML
                     )
+
                     
             except Exception as e:
                 logger.error(f"Error in analyze_specific_structure: {e}")
@@ -421,7 +489,16 @@ class TelegramBot:
                 "❌ Произошла ошибка при анализе текста. Пожалуйста, попробуйте позже."
             )
 
+    def save_user_data(self):
+        with open('user_data.json', 'w') as f:
+            json.dump(self.user_data, f)
 
+    def load_user_data(self):
+        try:
+            with open('user_data.json', 'r') as f:
+                self.user_data = json.load(f)
+        except FileNotFoundError:
+            self.user_data = {}
 
     async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик ошибок"""

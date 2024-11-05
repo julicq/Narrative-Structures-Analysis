@@ -423,7 +423,15 @@ class NarrativeEvaluator:
             {text}"""
             
             response = self._call_llm(prompt)
-            
+
+            # Проверяем, является ли response объектом с атрибутом generation_info
+            if hasattr(response, 'generation_info'):
+                tokens_used = response.generation_info.get('tokens_used', len(text) // 4)
+            else:
+                # Если response - это строка или другой объект без generation_info,
+                # используем приближенное значение
+                tokens_used = len(text) // 4
+                
             try:
                 structure_type = StructureType(structure)
             except ValueError:
@@ -457,7 +465,8 @@ class NarrativeEvaluator:
                 "analysis": response,
                 "formatted_structure": formatted_structure,
                 "structure_analysis": structure_analysis,
-                "visualization": visualization
+                "visualization": visualization,
+                "tokens_used": tokens_used
             }
         except Exception as e:
             logger.error(f"Error in analyze_specific_structure: {e}")
