@@ -33,3 +33,13 @@ Thumbs.db
 .env
 
 user_data.json
+
+# SQLite database
+*.db
+*.sqlite
+*.sqlite3
+
+# Other files to ignore
+*.bak
+*.swp
+*.swo
