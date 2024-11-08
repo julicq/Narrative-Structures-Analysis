@@ -255,9 +255,9 @@ class LLMFactory:
     }
 
     FALLBACK_CHAIN = {
-        ModelType.OLLAMA: ModelType.OLLAMA,
-        # ModelType.OPENAI: ModelType.OPENAI,
-        # ModelType.ANTHROPIC: ModelType.ANTHROPIC,
+        ModelType.OLLAMA: ModelType.GIGACHAT,
+        ModelType.OPENAI: ModelType.GIGACHAT,
+        ModelType.ANTHROPIC: ModelType.GIGACHAT,
         ModelType.GIGACHAT: None  # Конечная точка fallback
     }
 
@@ -276,10 +276,7 @@ class LLMFactory:
                 return bool(os.getenv('OPENAI_API_KEY'))
             elif model_type == ModelType.ANTHROPIC:
                 return bool(os.getenv('ANTHROPIC_API_KEY'))
-            elif model_type == ModelType.OPENAI:
-                return bool(os.getenv('OPENAI_API_KEY'))
-            elif model_type == ModelType.ANTHROPIC:
-                return bool(os.getenv('ANTHROPIC_API_KEY'))
+
         except Exception as e:
             logger.error(f"Error checking availability for {model_type}: {str(e)}")
             return False

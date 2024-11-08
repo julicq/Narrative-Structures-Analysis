@@ -426,7 +426,7 @@ class NarrativeEvaluator:
 
             # Проверяем, является ли response объектом с атрибутом generation_info
             if hasattr(response, 'generation_info'):
-                tokens_used = response.generation_info.get('tokens_used', len(text) // 4)
+                tokens_used = response.generation_info.get('tokens_used', len(text) // 2)
             else:
                 # Если response - это строка или другой объект без generation_info,
                 # используем приближенное значение
