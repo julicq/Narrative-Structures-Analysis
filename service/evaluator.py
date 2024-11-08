@@ -421,17 +421,21 @@ class NarrativeEvaluator:
             Provide a detailed breakdown of how the text fits or doesn't fit this structure:
 
             {text}"""
+
+            # Подсчитываем токены перед анализом
+            tokens_count = 0
+            if self.gigachat:
+                try:
+                    tokens_count = self.gigachat.count_tokens(prompt)
+                except Exception as e:
+                    logger.warning(f"Failed to count tokens with GigaChat: {e}")
             
+            # Если не удалось посчитать токены через GigaChat, используем приближенное значение
+            if tokens_count == 0:
+                tokens_count = len(text) // 2.5  # Приближенное значение
+
             response = self._call_llm(prompt)
 
-            # Проверяем, является ли response объектом с атрибутом generation_info
-            if hasattr(response, 'generation_info'):
-                tokens_used = response.generation_info.get('tokens_used', len(text) // 4)
-            else:
-                # Если response - это строка или другой объект без generation_info,
-                # используем приближенное значение
-                tokens_used = len(text) // 4
-                
             try:
                 structure_type = StructureType(structure)
             except ValueError:
@@ -466,7 +470,7 @@ class NarrativeEvaluator:
                 "formatted_structure": formatted_structure,
                 "structure_analysis": structure_analysis,
                 "visualization": visualization,
-                "tokens_used": tokens_used
+                "tokens_used": tokens_count
             }
         except Exception as e:
             logger.error(f"Error in analyze_specific_structure: {e}")

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Models</title>
+</head>
+<body>
+    <h1>Manage Models</h1>
+    <form method="POST">
+        {% for model_type, model_name in models.items() %}
+        <div>
+            <input type="checkbox" id="{{ model_type }}" name="models" value="{{ model_type }}"
+                   {% if model_type in selected_models|map(attribute='value') %}checked{% endif %}>
+            <label for="{{ model_type }}">{{ model_name }}</label>
+        </div>
+        {% endfor %}
+        <button type="submit">Save</button>
+    </form>
+    <a href="{{ url_for('dashboard.index') }}">Back to Dashboard</a>
+</body>
+</html>

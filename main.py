@@ -1,16 +1,29 @@
-# app.py
+# main.py
 
 from flask import Flask, render_template, request, jsonify, Response
 from typing import Union
-from service import initialize_llm, NarrativeEvaluator
+from shared.config import Config
 from http import HTTPStatus
 from collections.abc import Mapping
+from dashboard.routes import dashboard
+from bot.telegram_bot import TelegramBot
+import threading
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates')
+app.register_blueprint(dashboard, url_prefix='/dashboard')
 
-# Инициализация LLM и NarrativeEvaluator
-llm = initialize_llm()
-evaluator = NarrativeEvaluator(llm)
+# Инициализация конфигурации
+Config.validate()
+
+# Инициализация бота
+bot = TelegramBot()
+
+def run_bot():
+    bot.run()
+
+# Запуск бота в отдельном потоке
+bot_thread = threading.Thread(target=run_bot)
+bot_thread.start()
 
 @app.route('/', methods=['GET', 'POST'])
 def index() -> Union[str, tuple[Response, int]]:
@@ -33,7 +46,7 @@ def index() -> Union[str, tuple[Response, int]]:
                     'error': 'Empty text provided'
                 }), HTTPStatus.BAD_REQUEST
 
-            result: Mapping = evaluator.analyze(text)
+            result: Mapping = bot.evaluator.analyze(text)
             return jsonify(result), HTTPStatus.OK
 
         except Exception as e:
@@ -43,6 +56,10 @@ def index() -> Union[str, tuple[Response, int]]:
             }), HTTPStatus.INTERNAL_SERVER_ERROR
 
     return render_template('index.html')
+
+@app.route('/dashboard')
+def dashboard_index():
+    return render_template('dashboard/index.html')
 
 @app.errorhandler(404)
 def not_found(error) -> tuple[Response, int]:
@@ -56,4 +73,4 @@ def internal_error(error) -> tuple[Response, int]:
     return jsonify({'error': 'Internal server error'}), HTTPStatus.INTERNAL_SERVER_ERROR
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host=Config.FLASK_HOST, port=Config.FLASK_PORT, debug=Config.DEBUG)

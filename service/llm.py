@@ -24,6 +24,8 @@ import urllib3
 import requests
 from shared.config import Config
 import time
+import json
+from shared.constants import ModelType
 
 # Отключаем предупреждения о небезопасном SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -153,6 +155,32 @@ class CustomGigaChat(BaseChatModel):
                 logger.error(f"Response content: {response.text}")
             raise  # Перебрасываем исключение дальше
 
+    def count_tokens(self, text: str) -> int:
+        """Подсчет токенов с использованием API GigaChat"""
+        url = f"{self.config.base_url}/tokens/count"
+        payload = json.dumps({
+            "model": self.config.model_name,
+            "input": [text]
+        })
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': f'Bearer {self.access_token}'
+        }
+
+        try:
+            response = requests.post(url, headers=headers, data=payload, verify=False)
+            response.raise_for_status()
+            result = response.json()
+            # Проверяем, что result является словарем и содержит ключ 'tokens'
+            if isinstance(result, dict) and 'tokens' in result:
+                return result['tokens']
+            else:
+                logger.error(f"Unexpected response format: {result}")
+                return len(text.split())  # Возвращаем приблизительное количество токенов
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error in token count API call: {str(e)}")
+            return len(text.split())
 
     def _generate(
         self,
@@ -198,10 +226,11 @@ class CustomGigaChat(BaseChatModel):
             
             if 'choices' in result and len(result['choices']) > 0:
                 message = result['choices'][0]['message']
+                tokens_used = self.count_tokens(message['content'])  # Используем новый метод подсчета токенов
                 generation = ChatGeneration(
                     message=AIMessage(content=message['content']),
                     generation_info={"finish_reason": result['choices'][0].get('finish_reason'),
-                                     "tokens_used": result.get('usage', {}).get('total_tokens', count_tokens(message['content']))}
+                                    "tokens_used": tokens_used}
                 )
                 return ChatResult(generations=[generation])
             else:
@@ -255,9 +284,9 @@ class LLMFactory:
     }
 
     FALLBACK_CHAIN = {
-        ModelType.OLLAMA: ModelType.OLLAMA,
-        # ModelType.OPENAI: ModelType.OPENAI,
-        # ModelType.ANTHROPIC: ModelType.ANTHROPIC,
+        ModelType.OLLAMA: ModelType.GIGACHAT,
+        ModelType.OPENAI: ModelType.GIGACHAT,
+        ModelType.ANTHROPIC: ModelType.GIGACHAT,
         ModelType.GIGACHAT: None  # Конечная точка fallback
     }
 
@@ -269,13 +298,18 @@ class LLMFactory:
                 response = requests.get("http://localhost:11434/", timeout=2)
                 return response.status_code == 200
             elif model_type == ModelType.GIGACHAT:
-                # Проверяем наличие переменных окружения
-                return bool(os.getenv('GIGACHAT_CLIENT_ID') and 
-                          os.getenv('GIGACHAT_CLIENT_SECRET'))
-            elif model_type == ModelType.OPENAI:
-                return bool(os.getenv('OPENAI_API_KEY'))
-            elif model_type == ModelType.ANTHROPIC:
-                return bool(os.getenv('ANTHROPIC_API_KEY'))
+                if os.getenv('GIGACHAT_CLIENT_ID') and os.getenv('GIGACHAT_CLIENT_SECRET'):
+                    config = GigaChatConfig(
+                        client_id=os.getenv('GIGACHAT_CLIENT_ID'),
+                        client_secret=os.getenv('GIGACHAT_CLIENT_SECRET'),
+                        verify_ssl=False,
+                        cert_path=os.getenv('GIGACHAT_CERT')
+                    )
+                    model = CustomGigaChat(config=config)
+                    # Пробуем подсчитать токены для простого текста
+                    tokens = model.count_tokens("Тестовый текст")
+                    return isinstance(tokens, int) and tokens > 0
+                return False
             elif model_type == ModelType.OPENAI:
                 return bool(os.getenv('OPENAI_API_KEY'))
             elif model_type == ModelType.ANTHROPIC:
@@ -305,69 +339,72 @@ class LLMFactory:
         callback_manager = CallbackManager(callbacks)
         model_name = model_name or LLMFactory.DEFAULT_MODELS[model_type]
 
-        try:
-            # Проверяем доступность модели
-            if not LLMFactory.check_availability(model_type):
-                raise ConnectionError(f"{model_type} is not available")
+        while True:
+            try:
+                # Проверяем доступность модели
+                logger.info(f"Checking availability of {model_type}")
+                if not LLMFactory.check_availability(model_type):
+                    raise ConnectionError(f"{model_type} is not available")
 
-            if model_type == ModelType.GIGACHAT:
-                cert_path = os.getenv('GIGACHAT_CERT')
-                if not cert_path:
-                    raise ValueError("GIGACHAT_CERT environment variable is not set")
-                if not os.path.exists(cert_path):
-                    raise FileNotFoundError(f"Certificate file not found at {cert_path}")
-                
-                config = GigaChatConfig(
-                    client_id=os.getenv('GIGACHAT_CLIENT_ID'),
-                    client_secret=os.getenv('GIGACHAT_CLIENT_SECRET'),
-                    verify_ssl=False,  # Используем путь к сертификату
-                    cert_path=cert_path
-                )
-                model = CustomGigaChat(
-                    config=config,
-                    temperature=temperature,
-                    **kwargs
-                )
-            elif model_type == ModelType.OLLAMA:
-                model = OllamaLLM(
-                    model=model_name,
-                    callback_manager=callback_manager,
-                    temperature=temperature,
-                    base_url="http://localhost:11434",
-                    **kwargs
-                )
-            elif model_type == ModelType.OPENAI:
-                model = ChatOpenAI(
-                    model_name=model_name,
-                    temperature=temperature,
-                    streaming=streaming,
-                    api_key=os.getenv("OPENAI_API_KEY"),
-                    **kwargs
-                )
-            elif model_type == ModelType.ANTHROPIC:
-                model = ChatAnthropic(
-                    model=model_name,
-                    temperature=temperature,
-                    streaming=streaming,
-                    api_key=os.getenv("ANTHROPIC_API_KEY"),
-                    **kwargs
-                )
-            return model, model_type
-
-        except Exception as e:
-            logger.error(f"Error creating {model_type} instance: {str(e)}")
-            if try_fallback:
-                fallback_type = LLMFactory.FALLBACK_CHAIN.get(model_type)
-                if fallback_type:
-                    logger.info(f"Falling back to {fallback_type}")
-                    return LLMFactory.create_llm(
-                        fallback_type,
+                logger.info(f"Creating {model_type} instance")
+                if model_type == ModelType.GIGACHAT:
+                    cert_path = os.getenv('GIGACHAT_CERT')
+                    if not cert_path:
+                        raise ValueError("GIGACHAT_CERT environment variable is not set")
+                    if not os.path.exists(cert_path):
+                        raise FileNotFoundError(f"Certificate file not found at {cert_path}")
+                    
+                    config = GigaChatConfig(
+                        client_id=os.getenv('GIGACHAT_CLIENT_ID'),
+                        client_secret=os.getenv('GIGACHAT_CLIENT_SECRET'),
+                        verify_ssl=False,
+                        cert_path=cert_path
+                    )
+                    model = CustomGigaChat(
+                        config=config,
                         temperature=temperature,
-                        streaming=streaming,
-                        try_fallback=True,
                         **kwargs
                     )
-            raise
+                elif model_type == ModelType.OLLAMA:
+                    model = OllamaLLM(
+                        model=model_name,
+                        callback_manager=callback_manager,
+                        temperature=temperature,
+                        base_url="http://localhost:11434",
+                        **kwargs
+                    )
+                elif model_type == ModelType.OPENAI:
+                    model = ChatOpenAI(
+                        model_name=model_name,
+                        temperature=temperature,
+                        streaming=streaming,
+                        api_key=os.getenv("OPENAI_API_KEY"),
+                        **kwargs
+                    )
+                elif model_type == ModelType.ANTHROPIC:
+                    model = ChatAnthropic(
+                        model=model_name,
+                        temperature=temperature,
+                        streaming=streaming,
+                        api_key=os.getenv("ANTHROPIC_API_KEY"),
+                        **kwargs
+                    )
+                return model, model_type
+
+            except Exception as e:
+                logger.error(f"Error creating {model_type} instance: {str(e)}")
+                if try_fallback:
+                    fallback_type = LLMFactory.FALLBACK_CHAIN.get(model_type)
+                    if fallback_type:
+                        logger.info(f"Falling back to {fallback_type}")
+                        model_type = fallback_type
+                        model_name = LLMFactory.DEFAULT_MODELS[fallback_type]
+                    else:
+                        logger.error("No more fallback options available")
+                        raise
+                else:
+                    raise
+
 
 class LLMManager:
     """Менеджер для работы с несколькими LLM моделями"""

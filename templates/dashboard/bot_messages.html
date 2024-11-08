@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Bot Messages</title>
+</head>
+<body>
+    <h1>Manage Bot Messages</h1>
+    <form method="POST">
+        <div>
+            <label for="welcome_message">Welcome Message:</label>
+            <textarea id="welcome_message" name="welcome_message" rows="4" cols="50">{{ welcome_message }}</textarea>
+        </div>
+        <div>
+            <label for="help_message">Help Message:</label>
+            <textarea id="help_message" name="help_message" rows="4" cols="50">{{ help_message }}</textarea>
+        </div>
+        <button type="submit">Save</button>
+    </form>
+    <a href="{{ url_for('dashboard.index') }}">Back to Dashboard</a>
+</body>
+</html>

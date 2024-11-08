@@ -111,6 +111,15 @@ class TelegramBot:
         self.application.add_handler(CommandHandler("add_tokens", self.add_tokens_request))
         self.application.add_handler(CommandHandler("approve_tokens", self.approve_tokens_command, filters=filters.User(user_id=self.admin_id)))
 
+
+    def send_welcome(self, message):
+        welcome_message = Config.get_bot_message('welcome')
+        self.bot.reply_to(message, welcome_message)
+
+    def send_help(self, message):
+        help_message = Config.get_bot_message('help')
+        self.bot.reply_to(message, help_message)
+        
     def run(self):
         """Синхронный метод запуска бота"""
         if not self._initialized:
@@ -462,6 +471,7 @@ class TelegramBot:
         chat_id = update.effective_chat.id
         user_id = update.effective_user.id
         user_data = self.db.get_user_data(user_id)
+        user_balance = user_data.get("token_balance", 0)
         logger.info(f"Processing text for chat {chat_id} with structure {structure}")
         
         # Проверяем наличие баланса токенов в данных пользователя
@@ -502,9 +512,14 @@ class TelegramBot:
 
             result = self.evaluator.analyze_specific_structure(text, structure)
 
-            # После анализа вычитаем токены
+            # Перед анализом считаем токены
             tokens_used = result['tokens_used']
-            new_balance = user_data["token_balance"] - tokens_used
+        
+            if tokens_used > user_balance:
+                await update.message.reply_text(f"Недостаточно токенов. Требуется: {tokens_used}, доступно: {user_balance}")
+                return
+
+            new_balance = user_balance - tokens_used
             self.db.update_user_balance(user_id, new_balance)
             
             # Проверяем наличие и тип результата

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+</head>
+<body>
+    <h1>Dashboard</h1>
+    <ul>
+        <li><a href="{{ url_for('dashboard.manage_models') }}">Manage Models</a></li>
+        <li><a href="{{ url_for('dashboard.manage_bot_messages') }}">Manage Bot Messages</a></li>
+        <li><a href="{{ url_for('dashboard.list_users') }}">List Users</a></li>
+    </ul>
+</body>
+</html>

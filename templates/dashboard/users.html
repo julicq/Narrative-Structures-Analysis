@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User List</title>
+</head>
+<body>
+    <h1>User List</h1>
+    <table border="1">
+        <tr>
+            <th>User ID</th>
+            <th>Username</th>
+            <th>Tokens Left</th>
+        </tr>
+        {% for user in users %}
+        <tr>
+            <td>{{ user['user_id'] }}</td>
+            <td>{{ user['username'] }}</td>
+            <td>{{ user['tokens_left'] }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    <a href="{{ url_for('dashboard.index') }}">Back to Dashboard</a>
+</body>
+</html>

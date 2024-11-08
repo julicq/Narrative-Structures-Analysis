@@ -1,10 +1,11 @@
 # shared/config.py
 
 from enum import Enum
+import json
 from typing import Optional
 import os
 from dotenv import load_dotenv
-import traceback
+from shared.constants import DASHBOARD_CONFIG_DIR, ModelType
 
 load_dotenv()
 
@@ -26,6 +27,11 @@ def debug_env_value(key: str, default: str = None) -> str:
 class Config:
     # Базовые настройки
     DEBUG: bool = os.getenv('DEBUG', 'False').lower() == 'true'
+
+    # Настройки для дашборда
+    DASHBOARD_CONFIG_DIR: str = os.getenv('DASHBOARD_CONFIG_DIR', 'config')
+    SELECTED_MODELS_FILE: str = os.path.join(DASHBOARD_CONFIG_DIR, 'selected_models.json')
+    BOT_MESSAGES_FILE: str = os.path.join(DASHBOARD_CONFIG_DIR, 'bot_messages.json')
 
     # Flask конфигурация
     FLASK_HOST: str = '0.0.0.0'
@@ -74,6 +80,38 @@ class Config:
     REQUEST_TIMEOUT: int = int(os.getenv('REQUEST_TIMEOUT', '300'))
     MAX_RETRIES: int = int(os.getenv('MAX_RETRIES', '3'))
     RETRY_DELAY: int = int(os.getenv('RETRY_DELAY', '1'))
+
+    @staticmethod
+    def get_selected_models():
+        file_path = os.path.join(DASHBOARD_CONFIG_DIR, 'selected_models.json')
+        if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+            # Инициализируем файл данными по умолчанию
+            default_models = [model_type.value for model_type in ModelType]
+            with open(file_path, 'w') as f:
+                json.dump(default_models, f)
+            return default_models
+        
+        with open(file_path, 'r') as f:
+            return json.load(f)
+        
+    @staticmethod
+    def set_selected_models(models):
+        file_path = os.path.join(Config.DASHBOARD_CONFIG_DIR, 'selected_models.json')
+        with open(file_path, 'w') as f:
+            json.dump([model.value for model in models], f)
+
+    @classmethod
+    def get_bot_message(cls, message_type: str) -> str:
+        """Получение сообщения бота по типу"""
+        messages = cls.get_bot_messages()
+        return messages.get(message_type, "")
+
+    @classmethod
+    def set_bot_message(cls, message_type: str, message: str):
+        """Установка сообщения бота по типу"""
+        messages = cls.get_bot_messages()
+        messages[message_type] = message
+        cls.set_bot_messages(messages)
 
     @classmethod
     def get_model_credentials(cls, model_type: ModelType) -> Optional[dict]:
@@ -132,3 +170,28 @@ class Config:
             credentials.get(field) is not None 
             for field in required_fields[model_type]
         )
+
+    @classmethod
+    def get_bot_messages(cls):
+        file_path = os.path.join(DASHBOARD_CONFIG_DIR, 'bot_messages.json')
+        if not os.path.exists(file_path):
+            # Создаем файл с сообщениями по умолчанию, если он не существует
+            default_messages = {
+                'welcome': 'Добро пожаловать!',
+                'goodbye': 'До свидания!',
+                # Добавьте другие сообщения по умолчанию
+            }
+            with open(file_path, 'w') as f:
+                json.dump(default_messages, f)
+            return default_messages
+        
+        with open(file_path, 'r') as f:
+            return json.load(f)
+
+    @classmethod
+    def set_bot_message(cls, message_type, message):
+        messages = cls.get_bot_messages()
+        messages[message_type] = message
+        file_path = os.path.join(DASHBOARD_CONFIG_DIR, 'bot_messages.json')
+        with open(file_path, 'w') as f:
+            json.dump(messages, f)
