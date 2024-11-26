@@ -45,7 +45,7 @@ class TelegramBot:
         self.evaluator = None
         self.user_states: Dict[int, Dict[str, Any]] = {}
         self.user_data: Dict[int, Dict[str, Any]] = {}
-        self.DEFAULT_TOKEN_BALANCE = 100_000
+        self.DEFAULT_TOKEN_BALANCE = 25_000
         self.PAGE_LIMIT = 50
         self.TOKENS_PER_PAGE = 500
         self.db = Database()
