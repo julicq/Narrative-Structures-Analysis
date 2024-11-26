@@ -266,21 +266,22 @@ class LLMFactory:
         """Проверяет доступность модели"""
         try:
             if model_type == ModelType.OLLAMA:
-                response = requests.get("http://localhost:11434/", timeout=2)
-                return response.status_code == 200
+                try:
+                    response = requests.get("http://localhost:11434/api/tags", timeout=2)
+                    return response.status_code == 200
+                except requests.exceptions.RequestException:
+                    return False
             elif model_type == ModelType.GIGACHAT:
-                # Проверяем наличие переменных окружения
-                return bool(os.getenv('GIGACHAT_CLIENT_ID') and 
-                          os.getenv('GIGACHAT_CLIENT_SECRET'))
+                required_vars = ['GIGACHAT_CLIENT_ID', 'GIGACHAT_CLIENT_SECRET', 'GIGACHAT_CERT']
+                return all(os.getenv(var) for var in required_vars)
             elif model_type == ModelType.OPENAI:
                 return bool(os.getenv('OPENAI_API_KEY'))
             elif model_type == ModelType.ANTHROPIC:
                 return bool(os.getenv('ANTHROPIC_API_KEY'))
-
+            return False
         except Exception as e:
             logger.error(f"Error checking availability for {model_type}: {str(e)}")
             return False
-        return False
 
     @staticmethod
     def create_llm(
@@ -298,15 +299,29 @@ class LLMFactory:
             except ValueError:
                 raise ValueError(f"Unsupported model type: {model_type}")
 
+        # Проверяем доступность модели до создания экземпляра
+        if not LLMFactory.check_availability(model_type):
+            logger.warning(f"{model_type} is not available")
+            if try_fallback:
+                fallback_type = LLMFactory.FALLBACK_CHAIN.get(model_type)
+                if fallback_type:
+                    logger.info(f"Falling back to {fallback_type}")
+                    return LLMFactory.create_llm(
+                        fallback_type,
+                        temperature=temperature,
+                        streaming=streaming,
+                        try_fallback=True,
+                        **kwargs
+                    )
+                else:
+                    raise ConnectionError(f"No available fallback for {model_type}")
+            raise ConnectionError(f"{model_type} is not available and fallback is disabled")
+
         callbacks = [StreamingStdOutCallbackHandler()] if streaming else []
         callback_manager = CallbackManager(callbacks)
         model_name = model_name or LLMFactory.DEFAULT_MODELS[model_type]
 
         try:
-            # Проверяем доступность модели
-            if not LLMFactory.check_availability(model_type):
-                raise ConnectionError(f"{model_type} is not available")
-
             if model_type == ModelType.GIGACHAT:
                 cert_path = os.getenv('GIGACHAT_CERT')
                 if not cert_path:
