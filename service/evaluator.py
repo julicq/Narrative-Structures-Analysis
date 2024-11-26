@@ -253,64 +253,10 @@ class NarrativeEvaluator:
 
     def classify(self, text: str) -> str:
         """
-        Классифицирует текст по типу нарративной структуры.
-        
-        Args:
-            text: Текст для анализа
-            
-        Returns:
-            str: Определенный тип структуры или "unknown"
-        """
-        prompt = f"""As a screenplay structure expert, analyze this screenplay and determine its narrative structure. 
-        Consider the following aspects:
-        1. Plot progression and major turning points
-        2. Character development arcs
-        3. Act structure and scene organization
-        4. Key dramatic moments and their placement
-        
-        Choose the MOST APPROPRIATE structure from these options:
-        1. "watts_eight_point_arc" - Eight Point Arc (Nigel Watts)
-        - Stasis → Trigger → Quest → Surprise → Critical Choice → Climax → Reversal → Resolution
-        
-        2. "vogler_hero_journey" - Hero's Journey (Chris Vogler)
-        - Ordinary World → Call to Adventure → Refusal → Meeting the Mentor → Crossing the Threshold → Tests, Allies, Enemies → Approach → Ordeal → Reward → Road Back → Resurrection → Return
-        
-        3. "three_act" - Three-Act Structure
-        - Setup (Act 1) → Confrontation (Act 2) → Resolution (Act 3)
-        - With clear inciting incident, midpoint, and climax
-        
-        4. "four_act" - Four-Act Structure
-        - Setup → Development → Climax → Resolution
-        - Each act approximately 25-30 pages
-        
-        5. "field_paradigm" - Paradigm (Sid Field)
-        - Setup → Plot Point 1 → Confrontation → Plot Point 2 → Resolution
-        - Strong emphasis on plot points
-        
-        6. "monomyth" - The Monomyth (Joseph Campbell)
-        - Departure → Initiation → Return
-        - Focus on hero's psychological/mythological journey
-        
-        7. "soth_story_structure" - Mini-Movie Method (Chris Soth)
-        - Eight clear 15-minute segments
-        - Each segment with its own dramatic arc
-        
-        8. "harmon_story_circle" - Story Circle (Dan Harmon)
-        - You → Need → Go → Search → Find → Take → Return → Change
-        
-        9. "gulino_sequence" - Sequence Approach (Paul Gulino)
-        - Eight 8-15 page sequences
-        - Each sequence as a mini-movie
-
-        Analyze the following screenplay excerpt and return ONLY the structure identifier (e.g. "three_act") that best matches. 
-        If truly impossible to determine, return "unknown".
-
-        Screenplay:
-        {text}
-
-        Structure identifier:"""
+        Классифицирует текст по типу нарративной структуры."""
         
         try:
+            prompt = self._get_prompt("classify", text)
             response = self._call_llm(prompt)
             structure = response.strip().lower()
             
@@ -386,7 +332,7 @@ class NarrativeEvaluator:
         try:
             prompt = narrative_structure.get_prompt()
             formatted_prompt = prompt.format(**formatted_structure)
-            llm_evaluation = self.llm(formatted_prompt)
+            llm_evaluation = self._call_llm(formatted_prompt)  # Используем _call_llm вместо прямого вызова
         except (KeyError, ValueError) as e:
             logger.error(f"Error during prompt formatting and evaluation: {e}")
             llm_evaluation = "Error during evaluation"
@@ -414,13 +360,9 @@ class NarrativeEvaluator:
         Анализирует текст согласно конкретной нарративной структуре.
         """
         try:
-            # Формируем промпт для анализа
+            # Используем существующий промпт
             display_name = StructureType.get_display_name(structure)
-            prompt = f"""Analyze the following text according to the {display_name} narrative structure. 
-            NEVER try to guess what this script is film from! 
-            Provide a detailed breakdown of how the text fits or doesn't fit this structure:
-
-            {text}"""
+            prompt = self._get_prompt("analyze", text, structure_name=display_name)
             
             response = self._call_llm(prompt)
 
