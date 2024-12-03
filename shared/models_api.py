@@ -3,64 +3,55 @@
 from collections.abc import Mapping
 from gigachat import GigaChat
 from langchain_community.chat_models import ChatOpenAI
-from langchain_community.llms import Anthropic
 from langchain_ollama.llms import OllamaLLM
 from langchain.prompts import PromptTemplate
 from langchain.schema.runnable import RunnableSequence
 import base64
 import logging
-from .config import Config, ModelType
+from shared.config import settings, ModelType
 
 logger = logging.getLogger(__name__)
 
 class ModelAPI:
     def __init__(self):
-        logger.info(f"Initializing ModelAPI with {Config.ACTIVE_MODEL.value}")
+        logger.info(f"Initializing ModelAPI with {settings.active_model}")
         self.model = self._initialize_model()
         self.prompt = self._create_prompt()
         logger.info("ModelAPI initialization completed")
 
-    def _initialize_model(self) -> GigaChat | ChatOpenAI | Anthropic:
+    def _initialize_model(self) -> GigaChat | ChatOpenAI:
         """Инициализация выбранной модели"""
         try:
-            if Config.ACTIVE_MODEL == ModelType.GIGACHAT:
-                if not Config.GIGACHAT_TOKEN:
+            if settings.active_model == ModelType.GIGACHAT:
+                if not settings.gigachat_token:
                     raise ValueError("GigaChat credentials not found")
                 return GigaChat(
-                    credentials=Config.GIGACHAT_TOKEN,
-                    verify_ssl_certs=False
+                    credentials=settings.gigachat_token,
+                    verify_ssl_certs=settings.gigachat_verify_ssl
                 )
             
-            elif Config.ACTIVE_MODEL == ModelType.OPENAI:
-                if not Config.OPENAI_API_KEY:
+            elif settings.active_model == ModelType.OPENAI:
+                if not settings.openai_api_key:
                     raise ValueError("OpenAI API key not found")
                 return ChatOpenAI(
-                    model_name=Config.OPENAI_MODEL_NAME,
+                    model_name=settings.openai_model_name,
                     temperature=0.7,
-                    api_key=Config.OPENAI_API_KEY
+                    api_key=settings.openai_api_key
                 )
             
-            elif Config.ACTIVE_MODEL == ModelType.ANTHROPIC:
-                if not Config.ANTHROPIC_API_KEY:
-                    raise ValueError("Anthropic API key not found")
-                return Anthropic(
-                    model=Config.ANTHROPIC_MODEL_NAME,
-                    api_key=Config.ANTHROPIC_API_KEY
-                )
-            
-            elif Config.ACTIVE_MODEL == ModelType.OLLAMA:
+            elif settings.active_model == ModelType.OLLAMA:
                 return OllamaLLM(
-                    model=Config.OLLAMA_MODEL_NAME, 
+                    model=settings.ollama_model_name, 
                     temperature=0.7, 
                     callback_manager=None, 
-                    base_url=Config.OLLAMA_BASE_URL or "http://localhost:11434"
+                    base_url=settings.ollama_base_url or "http://localhost:11434"
                 )
                 
             else:
-                raise ValueError(f"Unsupported model type: {Config.ACTIVE_MODEL}")
+                raise ValueError(f"Unsupported model type: {settings.active_model}")
 
         except Exception as e:
-            print(f"Error initializing model {Config.ACTIVE_MODEL}: {e}")
+            print(f"Error initializing model {settings.active_model}: {e}")
             raise
 
     def _create_prompt(self) -> PromptTemplate:
@@ -94,7 +85,7 @@ class ModelAPI:
             )
 
             # Для Ollama используем прямой вызов
-            if Config.ACTIVE_MODEL == ModelType.OLLAMA:
+            if settings.active_model == ModelType.OLLAMA:
                 logger.info("Using direct Ollama call")
                 result = self.model.invoke(formatted_prompt)
                 analysis_text = str(result)
@@ -122,16 +113,15 @@ class ModelAPI:
             return {
                 'status': 'error',
                 'error': f"Error during analysis: {str(e)}",
-                'model_info': f"{Config.ACTIVE_MODEL.value}"
+                'model_info': str(settings.active_model)
             }
 
-        
     def get_model_info(self) -> dict:
         """Получение информации о текущей модели"""
         return {
-            'model_type': Config.ACTIVE_MODEL.value,
-            'model_name': getattr(Config, f"{Config.ACTIVE_MODEL.value}_MODEL_NAME", None),
-            'base_url': getattr(Config, "OLLAMA_BASE_URL", None) if Config.ACTIVE_MODEL == ModelType.OLLAMA else None
+            'model_type': str(settings.active_model),
+            'model_name': getattr(settings, f"{settings.active_model}_model_name", None),
+            'base_url': settings.ollama_base_url if settings.active_model == ModelType.OLLAMA else None
         }
 
 # Глобальный экземпляр API

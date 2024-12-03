@@ -6,7 +6,6 @@ from typing import Optional, Union, Dict, Any, List, Tuple
 import uuid
 from langchain_ollama import OllamaLLM
 from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
 from langchain.callbacks.manager import CallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain_core.language_models.base import BaseLanguageModel
@@ -22,7 +21,7 @@ import os
 from dotenv import load_dotenv
 import urllib3
 import requests
-from shared.config import Config
+from shared.config import Config, settings, ModelType
 import time
 
 # Отключаем предупреждения о небезопасном SSL
@@ -33,10 +32,10 @@ load_dotenv(override=True)
 
 # Проверка загруженных значений
 print("Loaded environment variables:")
-print(f"GIGACHAT_CLIENT_ID: {os.getenv('GIGACHAT_CLIENT_ID')}")
-print(f"GIGACHAT_SCOPE: {os.getenv('GIGACHAT_SCOPE')}")
-print(f"GIGACHAT_VERIFY_SSL: {os.getenv('GIGACHAT_VERIFY_SSL')}")
-print(f"GIGACHAT_CERT: {os.getenv('GIGACHAT_CERT')}")
+print(f"GIGACHAT_CLIENT_ID: {settings.gigachat_client_id}")
+print(f"GIGACHAT_SCOPE: {settings.gigachat_scope}")
+print(f"GIGACHAT_VERIFY_SSL: {settings.gigachat_verify_ssl}")
+print(f"GIGACHAT_CERT: {settings.gigachat_cert}")
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -48,18 +47,9 @@ def count_tokens(text: str) -> int:
         """Примерный подсчет токенов в тексте"""
         return len(text.split())  # Простой подсчет по словам
 
-class ModelType(str, Enum):
-    """Поддерживаемые типы моделей"""
-    OPENAI = auto()
-    GIGACHAT = auto()
-    OLLAMA = auto()
-    ANTHROPIC = auto()
-
 class GigaChatConfig(BaseModel):
     """Конфигурация для GigaChat API"""
 
-    model_config = ConfigDict(protected_namespaces=())
-    
     client_id: str
     client_secret: str
     verify_ssl: bool = False
@@ -70,13 +60,21 @@ class GigaChatConfig(BaseModel):
     api_version: str = "v1"
     cert_path: Optional[str] = None
 
+    model_config = {
+        "protected_namespaces": ()
+    }
+
 class CustomGigaChat(BaseChatModel):
     """Кастомная реализация GigaChat"""
     
-    config: GigaChatConfig = Field(...)
-    temperature: float = Field(default=0.7)
-    access_token: Optional[str] = Field(default=None)
+    config: GigaChatConfig
+    temperature: float = 0.7
+    access_token: Optional[str] = None
     
+    model_config = {
+        "arbitrary_types_allowed": True
+    }
+
     @property
     def _llm_type(self) -> str:
         """Возвращает тип LLM модели"""
@@ -92,8 +90,8 @@ class CustomGigaChat(BaseChatModel):
 
     def __init__(self, **kwargs):
         # Получаем учетные данные из переменных окружения
-        client_id = os.getenv('GIGACHAT_CLIENT_ID')
-        client_secret = os.getenv('GIGACHAT_CLIENT_SECRET')
+        client_id = settings.gigachat_client_id
+        client_secret = settings.gigachat_client_secret
         logger.debug("Initializing CustomGigaChat with config:")
         logger.debug(f"Client ID: {kwargs.get('client_id', 'Not provided')}")
         logger.debug(f"Scope: {kwargs.get('scope', 'Not provided')}")
@@ -165,6 +163,10 @@ class CustomGigaChat(BaseChatModel):
         if not self.access_token:
             self._get_access_token()
 
+        # Убедимся, что у нас есть сообщения
+        if not messages:
+            raise ValueError("Messages list cannot be empty")
+        
         formatted_messages = [
             {
                 "role": "user" if isinstance(msg, HumanMessage) else "assistant",
@@ -172,6 +174,10 @@ class CustomGigaChat(BaseChatModel):
             }
             for msg in messages
         ]
+
+        # Добавим проверку
+        if not formatted_messages:
+            raise ValueError("No valid messages to send")
 
         headers = {
             'Content-Type': 'application/json',
@@ -251,13 +257,11 @@ class LLMFactory:
         ModelType.OLLAMA: "llama3.2",
         ModelType.OPENAI: "gpt-4",
         ModelType.GIGACHAT: "GigaChat:latest",
-        ModelType.ANTHROPIC: "claude-3-opus-20240229"
     }
 
     FALLBACK_CHAIN = {
         ModelType.OLLAMA: ModelType.GIGACHAT,
         ModelType.OPENAI: ModelType.GIGACHAT,
-        ModelType.ANTHROPIC: ModelType.GIGACHAT,
         ModelType.GIGACHAT: None  # Конечная точка fallback
     }
 
@@ -273,11 +277,9 @@ class LLMFactory:
                     return False
             elif model_type == ModelType.GIGACHAT:
                 required_vars = ['GIGACHAT_CLIENT_ID', 'GIGACHAT_CLIENT_SECRET', 'GIGACHAT_CERT']
-                return all(os.getenv(var) for var in required_vars)
+                return all(settings.dict().get(var.lower()) for var in required_vars)
             elif model_type == ModelType.OPENAI:
-                return bool(os.getenv('OPENAI_API_KEY'))
-            elif model_type == ModelType.ANTHROPIC:
-                return bool(os.getenv('ANTHROPIC_API_KEY'))
+                return bool(settings.openai_api_key)
             return False
         except Exception as e:
             logger.error(f"Error checking availability for {model_type}: {str(e)}")
@@ -293,9 +295,11 @@ class LLMFactory:
         **kwargs
     ) -> Tuple[BaseLanguageModel, ModelType]:
         """Создает экземпляр LLM модели указанного типа с поддержкой fallback"""
+        
+        # Convert string to ModelType if necessary
         if isinstance(model_type, str):
             try:
-                model_type = ModelType(model_type)
+                model_type = ModelType(model_type.lower())
             except ValueError:
                 raise ValueError(f"Unsupported model type: {model_type}")
 
@@ -307,7 +311,7 @@ class LLMFactory:
                 if fallback_type:
                     logger.info(f"Falling back to {fallback_type}")
                     return LLMFactory.create_llm(
-                        fallback_type,
+                            fallback_type,
                         temperature=temperature,
                         streaming=streaming,
                         try_fallback=True,
@@ -323,29 +327,29 @@ class LLMFactory:
 
         try:
             if model_type == ModelType.GIGACHAT:
-                cert_path = os.getenv('GIGACHAT_CERT')
+                cert_path = settings.gigachat_cert
                 if not cert_path:
                     raise ValueError("GIGACHAT_CERT environment variable is not set")
                 if not os.path.exists(cert_path):
                     raise FileNotFoundError(f"Certificate file not found at {cert_path}")
                 
                 config = GigaChatConfig(
-                    client_id=os.getenv('GIGACHAT_CLIENT_ID'),
-                    client_secret=os.getenv('GIGACHAT_CLIENT_SECRET'),
-                    verify_ssl=False,  # Используем путь к сертификату
+                    client_id=settings.gigachat_client_id,
+                    client_secret=settings.gigachat_client_secret,
+                    verify_ssl=False,
                     cert_path=cert_path
                 )
                 model = CustomGigaChat(
                     config=config,
                     temperature=temperature,
-                    **kwargs
+    **kwargs
                 )
             elif model_type == ModelType.OLLAMA:
                 model = OllamaLLM(
                     model=model_name,
                     callback_manager=callback_manager,
                     temperature=temperature,
-                    base_url="http://localhost:11434",
+                    base_url=settings.ollama_base_url,
                     **kwargs
                 )
             elif model_type == ModelType.OPENAI:
@@ -353,15 +357,7 @@ class LLMFactory:
                     model_name=model_name,
                     temperature=temperature,
                     streaming=streaming,
-                    api_key=os.getenv("OPENAI_API_KEY"),
-                    **kwargs
-                )
-            elif model_type == ModelType.ANTHROPIC:
-                model = ChatAnthropic(
-                    model=model_name,
-                    temperature=temperature,
-                    streaming=streaming,
-                    api_key=os.getenv("ANTHROPIC_API_KEY"),
+                    api_key=settings.openai_api_key,
                     **kwargs
                 )
             return model, model_type
@@ -454,7 +450,20 @@ def initialize_llm(
     model_name: Optional[str] = None,
     **kwargs
 ) -> BaseLanguageModel:
-    """Инициализирует одиночную модель LLM с поддержкой fallback"""
+    """
+    Инициализирует одиночную модель LLM с поддержкой fallback.
+    
+    Args:
+        model_type: Тип модели (ModelType или строка)
+        model_name: Имя модели (опционально)
+        **kwargs: Дополнительные параметры для инициализации
+        
+    Returns:
+        BaseLanguageModel: Инициализированная модель
+        
+    Raises:
+        ValueError: Если тип модели не поддерживается
+        ConnectionError: Если модель недоступна и нет доступного fallback
+    """
     model, _ = LLMFactory.create_llm(model_type, model_name, **kwargs)
     return model
-

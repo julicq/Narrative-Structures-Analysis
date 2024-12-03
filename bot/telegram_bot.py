@@ -19,7 +19,7 @@ from telegram.ext import (
 from narr_mod import StructureType
 from service.evaluator import NarrativeEvaluator
 from service import initialize_llm
-from shared.config import Config
+from shared.config import settings, ModelType
 import tempfile
 from pathlib import Path
 from app.file_handlers.doc_handler import extract_text as extract_doc_text
@@ -51,6 +51,8 @@ class TelegramBot:
         self.db = Database()
         self.balance_service = BalanceService()
         self.admin_id = 218293337
+        self.message_queue = {}
+        self.setup()
 
     def setup(self):
         """Синхронная инициализация бота"""
@@ -59,28 +61,32 @@ class TelegramBot:
             
         logger.info("Setting up Telegram bot...")
         
-        # Инициализация LLM и evaluator с поддержкой GigaChat
         try:
-            llm = initialize_llm()
-            gigachat_token = os.getenv('GIGACHAT_TOKEN')
+            self.application = Application.builder().token(settings.telegram_token).build()
+            
+            # Make sure we're passing a ModelType enum
+            active_model = settings.active_model
+            if isinstance(active_model, str):
+                active_model = ModelType(active_model.lower())
+            
+            # Initialize evaluator with model
+            model = initialize_llm(
+                model_type=active_model,
+                model_name=getattr(settings, f"{active_model}_model_name", None)
+            )
             
             self.evaluator = NarrativeEvaluator(
-                llm=llm,
-                gigachat_token=gigachat_token
+                llm=model,
+                gigachat_token=settings.gigachat_token,
+                model_type=str(active_model)  # Convert to string if needed by NarrativeEvaluator
             )
-            logger.info("Evaluator initialized successfully")
+
+            # Register handlers
+            self.register_handlers()
             
         except Exception as e:
-            logger.error(f"Failed to initialize LLM and evaluator: {e}")
-            raise ValueError("Failed to initialize LLM and evaluator")
-    
-        self.application = Application.builder().token(Config.TELEGRAM_TOKEN).build()
-        
-        # Регистрируем обработчики
-        self.register_handlers()
-        self._initialized = True
-        logger.info("Telegram bot setup completed")
-
+            logger.error(f"Error setting up bot: {e}")
+            raise
 
     def register_handlers(self):
         """Регистрация обработчиков команд"""

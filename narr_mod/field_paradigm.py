@@ -19,6 +19,17 @@ class FieldParadigm(NarrativeStructure):
     def structure_type(self) -> StructureType:
         return StructureType.FIELD_PARADIGM
 
+    CSS_TEMPLATE = """
+        .field-paradigm {
+            /* CSS стили для визуализации структуры Field's Paradigm */
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            padding: 20px;
+        }
+        /* Добавьте другие необходимые стили */
+        """
+
     # Константы для актов
     ACT_SETUP: Final[str] = "Setup"
     ACT_CONFRONTATION: Final[str] = "Confrontation"
@@ -244,7 +255,7 @@ class FieldParadigm(NarrativeStructure):
             str: HTML representation of the paradigm
         """
         title = "Парадигма (Сид Филд)" if lang == 'ru' else "Paradigm (Syd Field)"
-        
+    
         html_parts = [
             f"<h1>{title}</h1>",
             "<div class='field-paradigm'>",

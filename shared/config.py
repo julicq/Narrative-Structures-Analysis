@@ -4,127 +4,115 @@ from enum import Enum
 from typing import Optional
 import os
 from dotenv import load_dotenv
-import traceback
+from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 load_dotenv()
 
-class ModelType(Enum):
+class ModelType(str, Enum):
     GIGACHAT = "gigachat"
     OPENAI = "openai"
-    ANTHROPIC = "anthropic"
     OLLAMA = "ollama"
 
 def debug_env_value(key: str, default: str = None) -> str:
     """Get environment variable value with debug information."""
     value = os.getenv(key, default)
     if value:
-        # Убираем комментарии и лишние пробелы
         value = value.split('#')[0].strip()
     print(f"Loading {key}={value}")
     return value
 
-class Config:
+class Config(BaseSettings):
     # Базовые настройки
-    DEBUG: bool = os.getenv('DEBUG', 'False').lower() == 'true'
+    debug: bool = Field(default=False)
 
     # Flask конфигурация
-    FLASK_HOST: str = '0.0.0.0'
-    FLASK_PORT: int = 5001
-    FLASK_ENV = os.getenv('FLASK_ENV', 'development')
-    SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key')
+    flask_host: str = Field(default='0.0.0.0')
+    flask_port: int = Field(default=5001)
+    flask_env: str = Field(default='development')
+    secret_key: str = Field(default='your-secret-key')
 
     # Telegram конфигурация
-    TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+    telegram_token: str = Field(...)  # Required field
 
-    # Активная модель - используем debug_env_value для отладки
-    ACTIVE_MODEL: ModelType = ModelType(debug_env_value('ACTIVE_MODEL', 'gigachat').lower())
+    # Активная модель
+    active_model: ModelType = Field(
+        default=ModelType.GIGACHAT,
+        description="Active model type",
+        validate_default=True
+    )
 
     # Настройки Ollama
-    OLLAMA_MODEL_NAME: str = os.getenv('OLLAMA_MODEL_NAME', 'llama3.2')
-    OLLAMA_BASE_URL: str = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')
+    ollama_model_name: str = Field(default='llama3.2')
+    ollama_base_url: str = Field(default='http://localhost:11434')
 
     # Настройки GigaChat
-    GIGACHAT_CLIENT_ID: Optional[str] = os.getenv('GIGACHAT_CLIENT_ID')
-    GIGACHAT_CLIENT_SECRET: Optional[str] = os.getenv('GIGACHAT_CLIENT_SECRET')
-    GIGACHAT_VERIFY_SSL: bool = os.getenv('GIGACHAT_VERIFY_SSL', 'False').lower() == 'true'
-    GIGACHAT_MODEL_NAME: str = os.getenv('GIGACHAT_MODEL_NAME', 'GigaChat:latest')
-    GIGACHAT_SCOPE: str = os.getenv('GIGACHAT_SCOPE', 'GIGACHAT_API_PERS')
-    GIGACHAT_BASE_URL: str = os.getenv(
-        'GIGACHAT_BASE_URL', 
-        'https://gigachat.devices.sberbank.ru/api/v1'
+    gigachat_client_id: Optional[str] = None
+    gigachat_client_secret: Optional[str] = None
+    gigachat_verify_ssl: bool = Field(default=False)
+    gigachat_model_name: str = Field(default='GigaChat:latest')
+    gigachat_scope: str = Field(default='GIGACHAT_API_PERS')
+    gigachat_base_url: str = Field(
+        default='https://gigachat.devices.sberbank.ru/api/v1'
     )
-    GIGACHAT_AUTH_URL: str = os.getenv(
-        'GIGACHAT_AUTH_URL',
-        'https://ngw.devices.sberbank.ru:9443/api/v2/oauth'
+    gigachat_auth_url: str = Field(
+        default='https://ngw.devices.sberbank.ru:9443/api/v2/oauth'
     )
-    GIGACHAT_TOKEN: str = os.getenv('GIGACHAT_TOKEN')
-    GIGACHAT_CERT: str = os.getenv('GIGACHAT_CERT')
+    gigachat_token: Optional[str] = None
+    gigachat_cert: Optional[str] = None
 
     # Настройки OpenAI
-    OPENAI_API_KEY: Optional[str] = os.getenv('OPENAI_API_KEY')
-    OPENAI_MODEL_NAME: str = os.getenv('OPENAI_MODEL_NAME', 'gpt-4')
-    OPENAI_ORGANIZATION: Optional[str] = os.getenv('OPENAI_ORGANIZATION')
-
-    # Настройки Anthropic
-    ANTHROPIC_API_KEY: Optional[str] = os.getenv('ANTHROPIC_API_KEY')
-    ANTHROPIC_MODEL_NAME: str = os.getenv('ANTHROPIC_MODEL_NAME', 'claude-3')
+    openai_api_key: Optional[str] = None
+    openai_model_name: str = Field(default='gpt-4')
+    openai_organization: Optional[str] = None
 
     # Общие ограничения API
-    MAX_TEXT_LENGTH: int = int(os.getenv('MAX_TEXT_LENGTH', '10000'))
-    REQUEST_TIMEOUT: int = int(os.getenv('REQUEST_TIMEOUT', '300'))
-    MAX_RETRIES: int = int(os.getenv('MAX_RETRIES', '3'))
-    RETRY_DELAY: int = int(os.getenv('RETRY_DELAY', '1'))
+    max_text_length: int = Field(default=10000)
+    request_timeout: int = Field(default=300)
+    max_retries: int = Field(default=3)
+    retry_delay: int = Field(default=1)
 
-    @classmethod
-    def get_model_credentials(cls, model_type: ModelType) -> Optional[dict]:
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+        use_enum_values=True,
+        env_prefix="",
+        extra="ignore"
+    )
+
+    def get_model_credentials(self, model_type: ModelType) -> Optional[dict]:
         """Получение учетных данных для конкретной модели"""
         credentials = {
             ModelType.GIGACHAT: {
-                'client_id': cls.GIGACHAT_CLIENT_ID,
-                'client_secret': cls.GIGACHAT_CLIENT_SECRET,
-                'verify_ssl': cls.GIGACHAT_VERIFY_SSL,
-                'model_name': cls.GIGACHAT_MODEL_NAME,
-                'base_url': cls.GIGACHAT_BASE_URL,
-                'auth_url': cls.GIGACHAT_AUTH_URL,
-                'scope': cls.GIGACHAT_SCOPE
+                'client_id': self.gigachat_client_id,
+                'client_secret': self.gigachat_client_secret,
+                'verify_ssl': self.gigachat_verify_ssl,
+                'model_name': self.gigachat_model_name,
+                'base_url': self.gigachat_base_url,
+                'auth_url': self.gigachat_auth_url,
+                'scope': self.gigachat_scope
             },
             ModelType.OPENAI: {
-                'api_key': cls.OPENAI_API_KEY,
-                'model_name': cls.OPENAI_MODEL_NAME,
-                'organization': cls.OPENAI_ORGANIZATION
-            },
-            ModelType.ANTHROPIC: {
-                'api_key': cls.ANTHROPIC_API_KEY,
-                'model_name': cls.ANTHROPIC_MODEL_NAME
+                'api_key': self.openai_api_key,
+                'model_name': self.openai_model_name,
+                'organization': self.openai_organization
             },
             ModelType.OLLAMA: {
-                'model_name': cls.OLLAMA_MODEL_NAME,
-                'base_url': cls.OLLAMA_BASE_URL
+                'model_name': self.ollama_model_name,
+                'base_url': self.ollama_base_url
             }
         }
         return credentials.get(model_type)
 
-
-    @classmethod
-    def validate(cls):
-        """Проверка конфигурации"""
-        if not cls.TELEGRAM_TOKEN:
-            raise ValueError("TELEGRAM_TOKEN не установлен")
-            
-        if cls.ACTIVE_MODEL == ModelType.GIGACHAT and not cls.GIGACHAT_TOKEN:
-            raise ValueError("GIGACHAT_TOKEN не установлен, но выбрана модель GIGACHAT")
-        
-    @classmethod
-    def validate_model_credentials(cls, model_type: ModelType) -> bool:
+    def validate_model_credentials(self, model_type: ModelType) -> bool:
         """Проверка наличия необходимых учетных данных для модели"""
-        credentials = cls.get_model_credentials(model_type)
+        credentials = self.get_model_credentials(model_type)
         if not credentials:
             return False
 
         required_fields = {
             ModelType.GIGACHAT: ['client_id', 'client_secret'],
             ModelType.OPENAI: ['api_key'],
-            ModelType.ANTHROPIC: ['api_key'],
             ModelType.OLLAMA: ['base_url']
         }
 
@@ -132,3 +120,6 @@ class Config:
             credentials.get(field) is not None 
             for field in required_fields[model_type]
         )
+
+# Create a global instance
+settings = Config()
