@@ -1,0 +1,10 @@
+services:
+  bot:
+    build: .
+    volumes:
+      - ./db:/app/db
+      - ./logs:/app/logs
+    env_file:
+      - .env
+    restart: unless-stopped
+    init: true

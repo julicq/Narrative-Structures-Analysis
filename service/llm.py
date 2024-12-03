@@ -271,13 +271,13 @@ class LLMFactory:
         try:
             if model_type == ModelType.OLLAMA:
                 try:
-                    response = requests.get("http://localhost:11434/api/tags", timeout=2)
+                    response = requests.get("http://localhost:11434/api/tags", timeout=3)
                     return response.status_code == 200
                 except requests.exceptions.RequestException:
                     return False
             elif model_type == ModelType.GIGACHAT:
                 required_vars = ['GIGACHAT_CLIENT_ID', 'GIGACHAT_CLIENT_SECRET', 'GIGACHAT_CERT']
-                return all(settings.dict().get(var.lower()) for var in required_vars)
+                return all(settings.model_dump().get(var.lower()) for var in required_vars)
             elif model_type == ModelType.OPENAI:
                 return bool(settings.openai_api_key)
             return False

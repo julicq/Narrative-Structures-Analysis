@@ -35,12 +35,15 @@ class Config(BaseSettings):
     # Telegram конфигурация
     telegram_token: str = Field(...)  # Required field
 
-    # Активная модель
-    active_model: ModelType = Field(
-        default=ModelType.GIGACHAT,
-        description="Active model type",
-        validate_default=True
+    # Активная модель - исправленное определение
+    active_model: str = Field(
+        default="ollama",
+        env="ACTIVE_MODEL"
     )
+
+    @property
+    def active_model_type(self) -> ModelType:
+        return ModelType(self.active_model.lower())
 
     # Настройки Ollama
     ollama_model_name: str = Field(default='llama3.2')
