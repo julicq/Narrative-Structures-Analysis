@@ -10,17 +10,25 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
+
+
+# Копируем код проекта
+RUN pip install "poetry>=1.7.1"
+
+# Configure poetry
+RUN poetry config virtualenvs.create false
+
 # Создаем рабочую директорию
 WORKDIR /app
 
-# Копируем requirements.txt
-COPY requirements_exact.txt requirements.txt
 
-# Устанавливаем зависимости
-RUN pip install --no-cache-dir -r requirements.txt
+COPY pyproject.toml poetry.lock ./
+# Install dependencies with specific flags
+RUN poetry install --only main --no-interaction --no-ansi
 
-# Копируем код проекта
 COPY . .
+# Download spaCy model
+RUN python -m spacy download en_core_web_sm
 
 # Создаем необходимые директории
 RUN mkdir -p /app/db

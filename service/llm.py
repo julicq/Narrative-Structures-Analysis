@@ -15,6 +15,11 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langchain_core.outputs import ChatResult, ChatGeneration
 from pydantic import Field, BaseModel, ConfigDict
 from langchain_core.callbacks.base import BaseCallbackHandler
+from langchain_core.messages import (
+    AIMessage,
+    HumanMessage,
+    SystemMessage,
+)
 import logging
 from enum import Enum, auto
 import os
