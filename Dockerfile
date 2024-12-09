@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     build-essential \
     git \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Создаем непривилегированного пользователя
@@ -27,6 +28,7 @@ RUN mkdir -p /app /app/db && \
 
 # Установка Poetry через официальный установщик
 RUN curl -sSL https://install.python-poetry.org | python3 - && \
+    chmod +x /opt/poetry/bin/poetry && \
     poetry config virtualenvs.create false
 
 WORKDIR /app
