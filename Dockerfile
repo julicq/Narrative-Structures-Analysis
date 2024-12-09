@@ -6,7 +6,8 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     POETRY_VERSION=1.7.1 \
     POETRY_HOME="/opt/poetry" \
-    POETRY_NO_INTERACTION=1
+    POETRY_NO_INTERACTION=1 \
+    PATH="/opt/poetry/bin:$PATH"
 
 # Установка системных зависимостей
 RUN apt-get update && apt-get install -y \
@@ -20,17 +21,21 @@ RUN apt-get update && apt-get install -y \
 # Создаем непривилегированного пользователя
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-# Установка Poetry
-RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}"
+# Создаем и настраиваем директории
+RUN mkdir -p /app /app/db && \
+    chown -R appuser:appuser /app
 
-# Отключаем создание виртуального окружения
-RUN poetry config virtualenvs.create false
+# Установка Poetry через официальный установщик
+RUN curl -sSL https://install.python-poetry.org | python3 - && \
+    poetry config virtualenvs.create false
 
-# Создаем и настраиваем рабочую директорию
 WORKDIR /app
 
 # Копируем файлы зависимостей
 COPY --chown=appuser:appuser pyproject.toml poetry.lock ./
+
+# Переключаемся на непривилегированного пользователя
+USER appuser
 
 # Установка зависимостей
 RUN poetry install --only main --no-interaction --no-ansi
@@ -41,13 +46,9 @@ COPY --chown=appuser:appuser . .
 # Загружаем модель spaCy
 RUN python -m spacy download en_core_web_sm
 
-# Создаем необходимые директории и настраиваем права
-RUN mkdir -p /app/db && \
-    chown -R appuser:appuser /app && \
-    chmod -R 755 /app && \
-    chmod -R 777 /app/db
-
-# Переключаемся на непривилегированного пользователя
+# Настраиваем права для директории db
+USER root
+RUN chmod -R 777 /app/db
 USER appuser
 
 # Запускаем приложение
