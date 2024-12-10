@@ -6,9 +6,12 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     build-essential \
     git \
+    libreoffice \
+    antiword \
+    catdoc \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install "poetry>=1.7.1"
+RUN pip install poetry
 
 RUN poetry config virtualenvs.create false
 

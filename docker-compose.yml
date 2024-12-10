@@ -4,6 +4,7 @@ services:
     volumes:
       - ./db:/app/db
       - ./logs:/app/logs
+      - ./certs:/app/certs
     env_file:
       - .env
     restart: unless-stopped
