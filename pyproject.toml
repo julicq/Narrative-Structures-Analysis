@@ -30,6 +30,7 @@ langchain-ollama = "0.2.2rc1"
 langchain-gigachat = ">=0.0.2"
 nest-asyncio = "^1.6.0"
 langdetect = "^1.0.9"
+docx2txt = "^0.8"
 
 
 [tool.poetry.group.dev.dependencies]

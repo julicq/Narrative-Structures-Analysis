@@ -28,6 +28,8 @@ import urllib3
 import requests
 from shared.config import Config, settings, ModelType
 import time
+import threading
+from datetime import datetime, timedelta
 
 # Отключаем предупреждения о небезопасном SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -52,6 +54,141 @@ def count_tokens(text: str) -> int:
         """Примерный подсчет токенов в тексте"""
         return len(text.split())  # Простой подсчет по словам
 
+class TokenManager:
+    """Менеджер для управления токеном GigaChat"""
+    
+    def __init__(self, gigachat_instance):
+        self.gigachat = gigachat_instance
+        self.token: Optional[str] = None
+        self.token_expiry: Optional[datetime] = None
+        self.refresh_thread: Optional[threading.Thread] = None
+        self.stop_event = threading.Event()
+        self._lock = threading.Lock()
+        self.token_lifetime = timedelta(minutes=25)  # Токен живет 30 минут, обновляем за 5 минут
+        self.refresh_interval = 60  # Проверка каждую минуту
+        self.retry_attempts = 3
+        self.retry_delay = 5  # секунд между попытками
+        
+    def start(self) -> None:
+        """Запускает автоматическое обновление токена"""
+        if self.refresh_thread and self.refresh_thread.is_alive():
+            logger.warning("Token refresh thread already running")
+            return
+            
+        try:
+            self.refresh_token()  # Получаем первый токен
+            self.refresh_thread = threading.Thread(
+                target=self._auto_refresh_loop,
+                daemon=True,
+                name="TokenRefreshThread"
+            )
+            self.refresh_thread.start()
+            logger.info("Token refresh thread started successfully")
+        except Exception as e:
+            logger.error(f"Failed to start token refresh: {e}")
+            raise
+        
+    def stop(self) -> None:
+        """Останавливает автоматическое обновление токена"""
+        if self.refresh_thread:
+            self.stop_event.set()
+            self.refresh_thread.join(timeout=5)  # Ждем завершения потока
+            if self.refresh_thread.is_alive():
+                logger.warning("Token refresh thread did not stop gracefully")
+            self.token = None  # Очищаем токен
+            self.token_expiry = None  # Очищаем время истечения
+            
+    def _auto_refresh_loop(self) -> None:
+        """Цикл автоматического обновления токена с обработкой ошибок"""
+        while not self.stop_event.is_set():
+            try:
+                time.sleep(self.refresh_interval)
+                if self.needs_refresh():
+                    logger.debug("Token refresh needed, initiating refresh")
+                    self.refresh_token()
+            except Exception as e:
+                logger.error(f"Error in token refresh loop: {e}")
+                # Если произошла ошибка, уменьшаем интервал проверки
+                time.sleep(min(self.refresh_interval, 10))
+                
+    def needs_refresh(self) -> bool:
+        """Проверяет, нужно ли обновить токен"""
+        if not self.token or not self.token_expiry:
+            return True
+        # Обновляем токен за 5 минут до истечения
+        refresh_threshold = datetime.now() + timedelta(minutes=5)
+        return refresh_threshold >= self.token_expiry
+        
+    def refresh_token(self):
+        """Обновляет токен"""
+        with self._lock:
+            for attempt in range(self.retry_attempts):
+                try:
+                    credentials = base64.b64encode(
+                        f"{self.gigachat.config.client_id}:{self.gigachat.config.client_secret}".encode('utf-8')
+                    ).decode('utf-8')
+
+                    headers = {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'application/json',
+                        'RqUID': str(uuid.uuid4()),
+                        'Authorization': f'Basic {credentials}'
+                    }
+
+                    response = requests.post(
+                            self.gigachat.config.auth_url,
+                            headers=headers,
+                            data=f'scope={self.gigachat.config.scope}',
+                            verify=self.gigachat.config.verify_ssl,
+                            cert=self.gigachat.config.cert_path if self.gigachat.config.cert_path else None,
+                            timeout=10  # добавляем timeout
+                        )
+
+                    response.raise_for_status()
+                    token_data = response.json()
+                    # Проверяем наличие необходимых полей
+                    if 'access_token' not in token_data:
+                        raise ValueError("No access_token in response")
+                        
+                    self.token = token_data['access_token']
+
+                    # Если сервер возвращает expires_in, используем его
+                    if 'expires_in' in token_data:
+                        expires_in = int(token_data['expires_in'])
+                        self.token_lifetime = timedelta(seconds=expires_in)
+                        
+                    self.token_expiry = datetime.now() + self.token_lifetime
+                    logger.info("Token refreshed successfully")
+                    return
+            
+                except requests.exceptions.RequestException as e:
+                        logger.error(f"Attempt {attempt + 1}/{self.retry_attempts} failed: {str(e)}")
+                        if response and hasattr(response, 'text'):
+                            logger.error(f"Response content: {response.text}")
+                        if attempt < self.retry_attempts - 1:
+                            time.sleep(self.retry_delay)
+                        else:
+                            raise RuntimeError(f"Failed to refresh token after {self.retry_attempts} attempts")
+                
+                except Exception as e:
+                    logger.error(f"Failed to refresh token: {e}")
+                    raise
+
+    def get_token(self) -> str:
+        """Получает текущий действующий токен с автоматическим обновлением"""
+        with self._lock:
+            if self.needs_refresh():
+                try:
+                    self.refresh_token()
+                except Exception as e:
+                    logger.error(f"Failed to refresh token in get_token: {e}")
+                    if self.token:
+                        logger.warning("Using existing token despite refresh failure")
+                        return self.token
+                    raise
+            return self.token  # Добавляем возврат токена
+
+
 class GigaChatConfig(BaseModel):
     """Конфигурация для GigaChat API"""
 
@@ -75,6 +212,7 @@ class CustomGigaChat(BaseChatModel):
     config: GigaChatConfig
     temperature: float = 0.7
     access_token: Optional[str] = None
+    token_manager: Optional[TokenManager] = None
     
     model_config = {
         "arbitrary_types_allowed": True
@@ -97,12 +235,7 @@ class CustomGigaChat(BaseChatModel):
         # Получаем учетные данные из переменных окружения
         client_id = settings.gigachat_client_id
         client_secret = settings.gigachat_client_secret
-        logger.debug("Initializing CustomGigaChat with config:")
-        logger.debug(f"Client ID: {kwargs.get('client_id', 'Not provided')}")
-        logger.debug(f"Scope: {kwargs.get('scope', 'Not provided')}")
-        logger.debug(f"Verify SSL: {kwargs.get('verify_ssl', 'Not provided')}")
-        logger.debug(f"Cert Path: {kwargs.get('cert_path', 'Not provided')}")
-
+        
         if not client_id or not client_secret:
             raise ValueError("GIGACHAT_CLIENT_ID and GIGACHAT_CLIENT_SECRET must be set in environment variables")
             
@@ -118,44 +251,19 @@ class CustomGigaChat(BaseChatModel):
             temperature=kwargs.get('temperature', 0.7)
         )
         
-        # Получаем токен доступа
-        self._get_access_token()
-    
-    def _get_access_token(self) -> None:
-        """Получение токена доступа"""
-        response = None  # Инициализируем response здесь
-        try:
-            credentials = base64.b64encode(
-                f"{self.config.client_id}:{self.config.client_secret}".encode('utf-8')
-            ).decode('utf-8')
+        self.token_manager = TokenManager(self)
+        self.token_manager.start()
 
-            headers = {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Accept': 'application/json',
-                'RqUID': str(uuid.uuid4()),
-                'Authorization': f'Basic {credentials}'
-            }
+        logger.debug("Initializing CustomGigaChat with config:")
+        logger.debug(f"Client ID: {kwargs.get('client_id', 'Not provided')}")
+        logger.debug(f"Scope: {kwargs.get('scope', 'Not provided')}")
+        logger.debug(f"Verify SSL: {kwargs.get('verify_ssl', 'Not provided')}")
+        logger.debug(f"Cert Path: {kwargs.get('cert_path', 'Not provided')}")
 
-            response = requests.post(
-                self.config.auth_url,
-                headers=headers,
-                data=f'scope={self.config.scope}',
-                verify=False
-            )
 
-            logger.debug(f"Auth response status: {response.status_code}")
-            logger.debug(f"Auth response content: {response.text}")
-
-            response.raise_for_status()
-            token_data = response.json()
-            self.access_token = token_data['access_token']
-
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to get access token: {str(e)}")
-            if response and hasattr(response, 'text'):
-                logger.error(f"Response content: {response.text}")
-            raise  # Перебрасываем исключение дальше
-
+    def __del__(self):
+        if self.token_manager:
+            self.token_manager.stop()
 
     def _generate(
         self,
@@ -165,8 +273,11 @@ class CustomGigaChat(BaseChatModel):
         **kwargs: Any,
     ) -> ChatResult:
         """Генерация ответа на основе сообщений"""
-        if not self.access_token:
-            self._get_access_token()
+        if not self.token_manager:
+            raise RuntimeError("Token manager not initialized")
+        
+        # Получаем актуальный токен
+        access_token = self.token_manager.get_token()
 
         # Убедимся, что у нас есть сообщения
         if not messages:
@@ -187,7 +298,7 @@ class CustomGigaChat(BaseChatModel):
         headers = {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'Authorization': f'Bearer {self.access_token}'
+            'Authorization': f'Bearer {access_token}'
         }
 
         payload = {
