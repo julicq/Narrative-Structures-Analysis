@@ -35,10 +35,11 @@ class Config(BaseSettings):
     # Telegram конфигурация
     telegram_token: str = Field(...)  # Required field
 
-    # Активная модель - исправленное определение
+    # Активная модель - обновленное определение для Pydantic V2
     active_model: str = Field(
         default="ollama",
-        env="ACTIVE_MODEL"
+        validation_alias='ACTIVE_MODEL',
+        json_schema_extra={'env_var': 'ACTIVE_MODEL'}
     )
 
     @property
@@ -50,8 +51,8 @@ class Config(BaseSettings):
     ollama_base_url: str = Field(default='http://localhost:11434')
 
     # Настройки GigaChat
-    gigachat_client_id: Optional[str] = None
-    gigachat_client_secret: Optional[str] = None
+    gigachat_client_id: Optional[str] = Field(default=None)
+    gigachat_client_secret: Optional[str] = Field(default=None)
     gigachat_verify_ssl: bool = Field(default=False)
     gigachat_model_name: str = Field(default='GigaChat:latest')
     gigachat_scope: str = Field(default='GIGACHAT_API_PERS')
@@ -61,13 +62,13 @@ class Config(BaseSettings):
     gigachat_auth_url: str = Field(
         default='https://ngw.devices.sberbank.ru:9443/api/v2/oauth'
     )
-    gigachat_token: Optional[str] = None
-    gigachat_cert: Optional[str] = None
+    gigachat_token: Optional[str] = Field(default=None)
+    gigachat_cert: Optional[str] = Field(default=None)
 
     # Настройки OpenAI
-    openai_api_key: Optional[str] = None
+    openai_api_key: Optional[str] = Field(default=None)
     openai_model_name: str = Field(default='gpt-4')
-    openai_organization: Optional[str] = None
+    openai_organization: Optional[str] = Field(default=None)
 
     # Общие ограничения API
     max_text_length: int = Field(default=10000)

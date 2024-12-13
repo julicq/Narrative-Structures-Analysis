@@ -2,9 +2,10 @@
 
 import logging
 from narr_mod import StructureType, get_narrative_structure
+from service.rag_processor import NarrativeRAGProcessor
 from .extractor import extract_structure
 from .converter import convert_to_format, StoryStructureConverter
-from typing import Union, Optional, Dict, Any
+from typing import List, Dict, Any, Optional, Union
 from gigachat import GigaChat
 from gigachat.models import Chat, Messages, MessagesRole
 import langdetect
@@ -28,10 +29,14 @@ class NarrativeEvaluator:
         self.llm = llm
         self.structure_converter = StoryStructureConverter()
         self.gigachat: Optional[GigaChat] = None
+        self.gigachat_token = gigachat_token
+        self.model_type = model_type
         
         # Инициализация промптов
         self._init_prompts()
-        
+        credentials = {"token": gigachat_token} if gigachat_token else None
+        self.rag_processor = NarrativeRAGProcessor(llm, credentials)
+
         if gigachat_token:
             try:
                 self.gigachat = GigaChat(credentials=gigachat_token)
@@ -305,91 +310,58 @@ class NarrativeEvaluator:
             logger.error(f"Error in classify: {e}")
             return "three_act"  # В случае ошибки возвращаем three_act как безопасный вариант
 
-
     def evaluate(self, text: str, structure_name: str = None) -> dict:
         """
-        Проводит полный анализ текста согласно определенной структуре.
-        """
-        if structure_name is None:
-            structure_name = self.classify(text)
-
-        # Извлекаем базовую структуру
-        structure = extract_structure(text)
+        Проводит полный анализ текста согласно определенной структуре с использованием RAG.
         
-        # Конвертируем в нужный формат
-        formatted_structure = convert_to_format(structure, structure_name)
-        
-        # Получаем класс для работы с выбранной структурой
-        StructureClass = get_narrative_structure(structure_name)  # Get the class
-        narrative_structure = StructureClass()  # Create the instance
-        
-        # Проверяем корректность структуры
-        if not isinstance(formatted_structure, dict):
-            logger.warning(f"Warning: formatted_structure is not a dict. Type: {type(formatted_structure)}")
-            formatted_structure = {}
-        
-        # Формируем и выполняем промпт
-        try:
-            prompt = narrative_structure.get_prompt()
-            formatted_prompt = prompt.format(**formatted_structure)
-            llm_evaluation = self._call_llm(formatted_prompt)  # Используем _call_llm вместо прямого вызова
-        except (KeyError, ValueError) as e:
-            logger.error(f"Error during prompt formatting and evaluation: {e}")
-            llm_evaluation = "Error during evaluation"
-        
-        # Проводим структурный анализ
-        try:
-            structure_analysis = narrative_structure.analyze(formatted_structure)
-            visualization = narrative_structure.visualize(structure_analysis)
-        except Exception as e:
-            logger.error(f"Error during structure analysis: {e}")
-            structure_analysis = {}
-            visualization = None
-        
-        return {
-            "structure_name": narrative_structure.name(),
-            "llm_evaluation": llm_evaluation,
-            "structure_analysis": structure_analysis,
-            "visualization": visualization,
-            "formatted_structure": formatted_structure,
-            "raw_structure": structure
-        }
-
-    def analyze_specific_structure(self, text: str, structure: str) -> dict:
-        """
-        Анализирует текст согласно конкретной нарративной структуре.
-        """
-        try:
-            # Используем существующий промпт
-            display_name = StructureType.get_display_name(structure)
-            prompt = self._get_prompt("analyze", text, structure_name=display_name)
+        Args:
+            text: Входной текст для анализа
+            structure_name: Название структуры (опционально)
             
-            response = self._call_llm(prompt)
-
-            # Проверяем, является ли response объектом с атрибутом generation_info
-            if hasattr(response, 'generation_info'):
-                tokens_used = response.generation_info.get('tokens_used', len(text) // 2)
-            else:
-                # Если response - это строка или другой объект без generation_info,
-                # используем приближенное значение
-                tokens_used = len(text) // 4
-                
+        Returns:
+            dict: Результаты анализа
+        """
+        try:
+            # Используем RAG для получения релевантных частей текста
+            rag_context = self.rag_processor.process_text(text)
+            
+            # Если структура не указана, определяем её
+            if structure_name is None:
+                # Используем RAG для классификации на основе релевантных частей
+                structure_name = self.classify(rag_context["chunks"][0])  # Используем первый чанк для определения структуры
+            
+            # Получаем класс для работы с выбранной структурой
+            StructureClass = get_narrative_structure(structure_name)
+            narrative_structure = StructureClass()
+            
+            # Извлекаем базовую структуру из обработанных RAG чанков
+            combined_analysis = []
+            for chunk in rag_context["chunks"]:
+                # Извлекаем структуру из каждого чанка
+                chunk_structure = extract_structure(chunk)
+                combined_analysis.append(chunk_structure)
+            
+            # Объединяем результаты анализа чанков
+            structure = self._merge_chunk_analyses(combined_analysis)
+            
+            # Конвертируем в нужный формат
+            formatted_structure = convert_to_format(structure, structure_name)
+            
+            # Формируем и выполняем промпт с учетом контекста RAG
             try:
-                structure_type = StructureType(structure)
-            except ValueError:
-                logger.warning(f"Structure not found: {structure}. Using default structure.")
-                structure_type = StructureType.THREE_ACT
-                structure = structure_type.value
-
-            # Получаем класс структуры и создаем экземпляр
-            StructureClass = get_narrative_structure(structure_type)  # Get the class
-            narrative_structure = StructureClass()  # Create the instance
+                base_prompt = narrative_structure.get_prompt()
+                # Добавляем контекст из RAG в промпт
+                enhanced_prompt = self._enhance_prompt_with_rag(
+                    base_prompt, 
+                    rag_context["chunks"], 
+                    formatted_structure
+                )
+                llm_evaluation = self._call_llm(enhanced_prompt)
+            except Exception as e:
+                logger.error(f"Error during prompt evaluation: {e}")
+                llm_evaluation = "Error during evaluation"
             
-            # Извлекаем и форматируем структуру
-            extracted_structure = extract_structure(text)
-            formatted_structure = convert_to_format(extracted_structure, structure)
-            
-            # Проводим анализ
+            # Проводим структурный анализ
             try:
                 structure_analysis = narrative_structure.analyze(formatted_structure)
                 visualization = narrative_structure.visualize(structure_analysis)
@@ -398,40 +370,99 @@ class NarrativeEvaluator:
                 structure_analysis = {}
                 visualization = None
             
-            # Убедимся, что response - строка
-            if not isinstance(response, str):
-                response = str(response)
-            
             return {
-                "structure": display_name,
-                "analysis": response,
-                "formatted_structure": formatted_structure,
+                "structure_name": narrative_structure.display_name,
+                "llm_evaluation": llm_evaluation,
                 "structure_analysis": structure_analysis,
                 "visualization": visualization,
-                "tokens_used": tokens_used
+                "formatted_structure": formatted_structure,
+                "raw_structure": structure,
+                "rag_context": {
+                    "total_chunks": len(rag_context["chunks"]),
+                    "processed_chunks": len(combined_analysis)
+                }
             }
         except Exception as e:
-            logger.error(f"Error in analyze_specific_structure: {e}")
+            logger.error(f"Error in evaluate: {e}")
             raise
 
-
-    def get_available_structures(self) -> list:
+    def _merge_chunk_analyses(self, analyses: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Возвращает список доступных структур для анализа.
-        
-        Returns:
-            list: Список структур с описаниями
-        """
-        return self.structure_converter.get_available_structures()
-
-    def get_structure_info(self, structure_name: str) -> dict:
-        """
-        Возвращает информацию о конкретной структуре.
+        Объединяет анализы отдельных чанков в единый анализ.
         
         Args:
-            structure_name: Название структуры
+            analyses: Список анализов чанков
             
         Returns:
-            dict: Информация о структуре
+            Dict[str, Any]: Объединенный анализ
         """
-        return self.structure_converter.get_structure_info(structure_name)
+        if not analyses:
+            return {}
+        
+        merged = {
+            "acts": {},
+            "elements": {},
+            "themes": [],
+            "character_arcs": {},
+            "plot_points": []
+        }
+        
+        for analysis in analyses:
+            # Объединяем акты
+            for act_name, act_data in analysis.get("acts", {}).items():
+                if act_name not in merged["acts"]:
+                    merged["acts"][act_name] = []
+                merged["acts"][act_name].extend(act_data)
+            
+            # Объединяем элементы
+            for elem_name, elem_data in analysis.get("elements", {}).items():
+                if elem_name not in merged["elements"]:
+                    merged["elements"][elem_name] = []
+                merged["elements"][elem_name].extend(elem_data)
+            
+            # Объединяем темы
+            merged["themes"].extend(analysis.get("themes", []))
+            
+            # Объединяем арки персонажей
+            for char, arc in analysis.get("character_arcs", {}).items():
+                if char not in merged["character_arcs"]:
+                    merged["character_arcs"][char] = []
+                merged["character_arcs"][char].extend(arc)
+            
+            # Объединяем ключевые точки сюжета
+            merged["plot_points"].extend(analysis.get("plot_points", []))
+        
+        # Удаляем дубликаты
+        merged["themes"] = list(set(merged["themes"]))
+        merged["plot_points"] = list(set(merged["plot_points"]))
+        
+        return merged
+
+    def _enhance_prompt_with_rag(
+        self, 
+        base_prompt: str, 
+        rag_chunks: List[str], 
+        formatted_structure: Dict[str, Any]
+    ) -> str:
+        """
+        Улучшает базовый промпт контекстом из RAG.
+        
+        Args:
+            base_prompt: Базовый промпт
+            rag_chunks: Чанки из RAG
+            formatted_structure: Форматированная структура
+            
+        Returns:
+            str: Улучшенный промпт
+        """
+        # Добавляем контекст из наиболее релевантных чанков
+        context_prompt = "\n\nRelevant context from the text:\n"
+        for i, chunk in enumerate(rag_chunks[:3], 1):  # Используем только top-3 чанка
+            context_prompt += f"\nPassage {i}:\n{chunk}\n"
+        
+        # Добавляем информацию о структуре
+        structure_prompt = "\n\nStructural elements identified:\n"
+        for key, value in formatted_structure.items():
+            structure_prompt += f"\n{key}: {value}"
+        
+        return base_prompt + context_prompt + structure_prompt

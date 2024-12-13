@@ -31,6 +31,9 @@ langchain-gigachat = ">=0.0.2"
 nest-asyncio = "^1.6.0"
 langdetect = "^1.0.9"
 docx2txt = "^0.8"
+faiss-cpu = "^1.9.0.post1"
+torch = {version = "^2.5.1", extras = ["cpu"]}
+pytest = "^8.3.4"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.3"
