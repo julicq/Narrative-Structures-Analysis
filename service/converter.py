@@ -1,7 +1,7 @@
 # service/converter.py
 
 from dataclasses import dataclass
-from typing import Dict, List, Callable, Optional
+from typing import Dict, List, Callable, Optional, Any
 from enum import Enum
 import math
 
@@ -333,6 +333,108 @@ class StoryStructureConverter:
             }
             for structure, structure_def in cls.STRUCTURE_DEFINITIONS.items()
         ]
+    
+    def get_structure(self, structure_name: Optional[str] = None) -> Optional[StructureDefinition]:
+        """
+        Возвращает определение структуры по её имени.
+        
+        Args:
+            structure_name: Название структуры (опционально)
+            
+        Returns:
+            Optional[StructureDefinition]: Определение структуры или None если структура не найдена
+        """
+        try:
+            if structure_name is None:
+                # Возвращаем структуру по умолчанию (three_act)
+                return self.STRUCTURE_DEFINITIONS[StoryStructure.THREE_ACT]
+                
+            # Пробуем получить структуру по имени
+            story_structure = StoryStructure(structure_name.lower())
+            return self.STRUCTURE_DEFINITIONS.get(story_structure)
+            
+        except ValueError:
+            # Если структура не найдена в enum, пробуем найти по маппингу
+            structure_mapping = {
+                'three': StoryStructure.THREE_ACT,
+                'three-act': StoryStructure.THREE_ACT,
+                'three act': StoryStructure.THREE_ACT,
+                'four': StoryStructure.FOUR_ACT,
+                'four-act': StoryStructure.FOUR_ACT,
+                'four act': StoryStructure.FOUR_ACT,
+                'hero': StoryStructure.HERO_JOURNEY,
+                "hero's journey": StoryStructure.HERO_JOURNEY,
+                'heros journey': StoryStructure.HERO_JOURNEY,
+                'vogler': StoryStructure.VOGLER_HERO_JOURNEY,
+                'campbell': StoryStructure.MONOMYTH,
+                'monomyth': StoryStructure.MONOMYTH,
+                'field': StoryStructure.FIELD_PARADIGM,
+                'paradigm': StoryStructure.FIELD_PARADIGM,
+                'harmon': StoryStructure.HARMON_STORY_CIRCLE,
+                'story circle': StoryStructure.HARMON_STORY_CIRCLE,
+                'gulino': StoryStructure.GULINO_SEQUENCE,
+                'sequence': StoryStructure.GULINO_SEQUENCE,
+                'soth': StoryStructure.SOTH_STORY_STRUCTURE,
+                'watts': StoryStructure.WATTS_EIGHT_POINT_ARC,
+                'eight point': StoryStructure.WATTS_EIGHT_POINT_ARC,
+                'eight-point': StoryStructure.WATTS_EIGHT_POINT_ARC
+            }
+            
+            # Ищем ближайшее совпадение в маппинге
+            if structure_name:
+                structure_name_lower = structure_name.lower()
+                for key, value in structure_mapping.items():
+                    if key in structure_name_lower:
+                        return self.STRUCTURE_DEFINITIONS.get(value)
+            
+            # Если структура не найдена, возвращаем None
+            return None
+        
+    @classmethod
+    def get_default_structure(cls) -> StructureDefinition:
+        """
+        Возвращает структуру по умолчанию (three_act).
+        
+        Returns:
+            StructureDefinition: Структура по умолчанию
+        """
+        return cls.STRUCTURE_DEFINITIONS[StoryStructure.THREE_ACT]
+
+    @classmethod
+    def get_structure_by_enum(cls, structure_type: StoryStructure) -> Optional[StructureDefinition]:
+        """
+        Возвращает определение структуры по enum.
+        
+        Args:
+            structure_type: Тип структуры из enum StoryStructure
+            
+        Returns:
+            Optional[StructureDefinition]: Определение структуры или None
+        """
+        return cls.STRUCTURE_DEFINITIONS.get(structure_type)
+
+    def format_structure(self, structure_def: StructureDefinition) -> Dict[str, Any]:
+        """
+        Форматирует определение структуры в словарь.
+        
+        Args:
+            structure_def: Определение структуры
+            
+        Returns:
+            Dict[str, Any]: Отформатированная структура
+        """
+        return {
+            "name": structure_def.name,
+            "description": structure_def.description,
+            "segments": [
+                {
+                    "name": segment.name,
+                    "proportion": segment.proportion,
+                    "min_sentences": segment.min_sentences
+                }
+                for segment in structure_def.segments
+            ]
+        }
 
 def convert_to_format(structure: dict, structure_name: str) -> dict[str, str]:
     """

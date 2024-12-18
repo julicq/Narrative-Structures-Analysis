@@ -46,7 +46,7 @@ class TelegramBot:
         self.user_states: Dict[int, Dict[str, Any]] = {}
         self.user_data: Dict[int, Dict[str, Any]] = {}
         self.DEFAULT_TOKEN_BALANCE = 25_000
-        self.PAGE_LIMIT = 50
+        self.PAGE_LIMIT = 120
         self.TOKENS_PER_PAGE = 500
         self.db = Database()
         self.balance_service = BalanceService()
@@ -104,7 +104,9 @@ class TelegramBot:
         
         # Обработчик документов (файлов)
         self.application.add_handler(MessageHandler(
-            filters.Document.ALL, 
+            filters.Document.ALL | filters.Document.DOC | 
+            filters.Document.DOCX | filters.Document.PDF | 
+            filters.Document.TXT,
             self.handle_document
         ))
         
@@ -312,14 +314,15 @@ class TelegramBot:
     async def handle_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик файлов"""
         if not update.message or not update.message.document:
+            logger.error("No document in update")
             return
-            
+                
         try:
-            file = await update.message.document.get_file()
-            file_name = update.message.document.file_name
+            document = update.message.document
+            file_name = document.file_name
             file_extension = Path(file_name).suffix.lower()
             
-            logger.info(f"Processing file: {file_name}")
+            logger.info(f"Received document: {file_name} (mime type: {document.mime_type})")
 
             # Проверяем поддерживаемые форматы
             supported_extensions = {'.txt', '.doc', '.docx', '.pdf'}
@@ -336,63 +339,55 @@ class TelegramBot:
                 f"🔄 Обрабатываю файл {file_name}..."
             )
 
+            # Получаем файл
+            file = await document.get_file()
+            logger.info(f"Got file object: {file.file_id}")
+
             # Создаем временную директорию для работы с файлом
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_file = Path(temp_dir) / file_name
-                await file.download_to_drive(str(temp_file))
-                
-                text = None
+                logger.info(f"Downloading file to: {temp_file}")
                 
                 try:
+                    await file.download_to_drive(str(temp_file))
+                    logger.info("File downloaded successfully")
+                    
+                    text = None
+                    
                     # Извлекаем текст в зависимости от формата файла
                     if file_extension == '.txt':
+                        logger.info("Processing TXT file")
                         with open(temp_file, 'r', encoding='utf-8') as f:
                             text = f.read()
                             
                     elif file_extension in ['.doc', '.docx']:
+                        logger.info("Processing DOC/DOCX file")
                         text = extract_doc_text(temp_file)
                             
                     elif file_extension == '.pdf':
+                        logger.info("Processing PDF file")
                         text = extract_text_from_pdf(temp_file)
 
-                except FileNotFoundError:
-                    await processing_message.edit_text(
-                        "❌ Ошибка: файл не найден или недоступен."
-                    )
-                    return
-                except ValueError as e:
-                    await processing_message.edit_text(
-                        f"❌ Ошибка: {str(e)}"
-                    )
-                    return
+                    if not text or not text.strip():
+                        await processing_message.edit_text(
+                            "❌ Не удалось извлечь текст из файла. "
+                            "Возможно, файл пуст или содержит только изображения."
+                        )
+                        return
+
+                    logger.info(f"Successfully extracted text, length: {len(text)}")
+                    structure = context.user_data.get('selected_structure', "Auto-detect")
+                    await self.process_text(update, context, text, structure)
+                    await processing_message.delete()
+
                 except Exception as e:
-                    logger.error(f"Error processing file {file_name}: {str(e)}")
+                    logger.error(f"Error processing file: {str(e)}", exc_info=True)
                     await processing_message.edit_text(
-                        "❌ Ошибка при обработке файла. "
-                        "Возможно, файл поврежден или имеет неподдерживаемый формат."
+                        f"❌ Ошибка при обработке файла: {str(e)}"
                     )
-                    return
-
-            if not text or not text.strip():
-                await processing_message.edit_text(
-                    "❌ Не удалось извлечь текст из файла. "
-                    "Возможно, файл пуст или содержит только изображения."
-                )
-                return
-
-            # Проверка длины текста и предупреждение пользователя
-            if len(text) > 50000:  # примерное ограничение
-                await update.message.reply_text(
-                    "⚠️ Внимание: текст очень длинный. "
-                    "Анализ может занять продолжительное время."
-                )
-
-            structure = context.user_data.get('selected_structure', "Auto-detect")
-            await self.process_text(update, context, text, structure)
-            await processing_message.delete()
-            
+                    
         except Exception as e:
-            logger.error(f"Error in handle_document: {e}", exc_info=True)
+            logger.error(f"Error in handle_document: {str(e)}", exc_info=True)
             await update.message.reply_text(
                 "❌ Произошла ошибка при обработке файла. "
                 "Пожалуйста, убедитесь, что файл не поврежден и попробуйте снова."
@@ -481,13 +476,9 @@ class TelegramBot:
             await update.message.reply_text("У вас недостаточно токенов для анализа. Пожалуйста, обратитесь к администратору для пополнения баланса.")
             return
 
-        # Оцениваем количество страниц и токенов
-        estimated_pages = len(text) // 1000  # Примерно 1000 символов на страницу
-        estimated_tokens = estimated_pages * self.TOKENS_PER_PAGE
-
-        if estimated_pages > self.PAGE_LIMIT:
-            await update.message.reply_text(f"Текст превышает установленный лимит в {self.PAGE_LIMIT} страниц. Текущий размер: примерно {estimated_pages} страниц.")
-            return
+        # Оцениваем количество токенов перед анализом
+        estimated_tokens = len(text.split()) * 4  # Примерная оценка: 4 токена на слово
+        current_balance = self.balance_service.get_balance(user_id)
 
         if estimated_tokens > user_data["token_balance"]:
             await update.message.reply_text(f"Недостаточно токенов для анализа. Требуется примерно {estimated_tokens} токенов, а у вас {user_data['token_balance']}.")
@@ -495,7 +486,6 @@ class TelegramBot:
         
         try:
             if structure == "Auto-detect":
-                logger.info("Using auto-detection for structure")
                 try:
                     structure = self.evaluator.classify(text)
                     logger.info(f"Auto-detected structure: {structure}")
@@ -506,53 +496,63 @@ class TelegramBot:
                     )
                     return
 
-            result = self.evaluator.analyze_specific_structure(text, structure)
-
-            # После анализа вычитаем токены
-            tokens_used = result['tokens_used']
-            new_balance = user_data["token_balance"] - tokens_used
-            self.db.update_user_balance(user_id, new_balance)
-            
-            # Проверяем наличие и тип результата
-            if not isinstance(result, dict):
-                raise ValueError("Invalid result format")
-            
-            # Формируем упрощенный ответ без визуализации
-            response_parts = []
-            
-            # Добавляем информацию о структуре
-            if 'structure' in result:
-                response_parts.append(f"📊 <b>Тип структуры:</b> {result['structure']}\n")
-            
-            # Добавляем основной анализ
-            if 'analysis' in result and result['analysis']:
-                analysis_text = str(result['analysis']).replace('*', '•')
-                response_parts.append(f"<b>Анализ текста:</b>\n{analysis_text}")
-            
-            # Объединяем все части
-            response = '\n'.join(response_parts)
-            
-            # Добавляем информацию о токенах
-            response += f"\n\nИспользовано токенов: {tokens_used}\n"
-            response += f"Оставшийся баланс: {new_balance} токенов"
-
-            # Разбиваем длинные сообщения на части если необходимо
-            if len(response) > 4096:
-                for x in range(0, len(response), 4096):
+            try:
+                # Анализируем текст
+                result = self.evaluator.evaluate(text, structure)
+                
+                # Определяем количество использованных токенов
+                tokens_used = result.get('tokens_used', len(text.split()) * 4)
+                
+                # Проверяем и обновляем баланс
+                current_balance = self.balance_service.get_balance(user_id)
+                if current_balance < tokens_used:
                     await update.message.reply_text(
-                        response[x:x+4096],
-                        parse_mode=ParseMode.HTML
+                        f"❌ Недостаточно токенов для анализа. Необходимо: {tokens_used}, доступно: {current_balance}."
                     )
-            else:
+                    return
+                    
+                new_balance = self.balance_service.use_tokens(user_id, tokens_used)
+                
+                # Формируем ответное сообщение с HTML-разметкой
+                structure_name = result.get('structure_name', 'Не определена')
+                evaluation_text = result.get('llm_evaluation', 'Нет данных')
+                
+                # Основная часть анализа
+                main_response = (
+                    "✅ <b>Анализ завершен</b>\n\n"
+                    f"<b>Структура</b>: {structure_name}\n\n"
+                    f"<b>Анализ</b>:\n{evaluation_text}"
+                )
+                
+                # Информация о токенах
+                tokens_info = (
+                    f"\n\n<b>Использовано токенов</b>: {tokens_used}\n"
+                    f"<b>Остаток токенов</b>: {new_balance}"
+                )
+                
+                # Отправляем сообщения
                 await update.message.reply_text(
-                    response,
+                    main_response, 
+                    parse_mode=ParseMode.HTML
+                )
+                
+                await update.message.reply_text(
+                    tokens_info,
+                    parse_mode=ParseMode.HTML
+                )
+                
+            except Exception as e:
+                logger.error(f"Error in analysis: {e}", exc_info=True)
+                await update.message.reply_text(
+                    "❌ Произошла ошибка при анализе текста. Пожалуйста, попробуйте позже.",
                     parse_mode=ParseMode.HTML
                 )
                     
         except Exception as e:
             logger.error(f"Error in process_text: {e}", exc_info=True)
             await update.message.reply_text(
-                "❌ Произошла ошибка при анализе текста. Пожалуйста, попробуйте позже."
+                "❌ Произошла ошибка при обработке текста. Пожалуйста, попробуйте позже.",
+                parse_mode=ParseMode.HTML
             )
 
     async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

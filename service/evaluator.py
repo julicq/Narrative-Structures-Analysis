@@ -240,12 +240,42 @@ class NarrativeEvaluator:
             # Для русского текста пробуем сначала GigaChat
             if lang == 'ru' and self.gigachat:
                 try:
-                    messages = [{"role": "user", "content": prompt}]
+                    # Проверяем длину промпта
+                    max_length = 30_000  # Оставляем запас от лимита в 32К
+                    if len(prompt) > max_length:
+                        prompt = prompt[:max_length] + "\n...\nПожалуйста, проанализируйте доступную часть текста."
+                    # Форматируем промпт для GigaChat
+                    formatted_prompt = self._format_prompt_for_gigachat(prompt)
+                    messages = [
+                        {
+                            "role": "system",
+                            "content": (
+                                "Вы - эксперт по анализу сценариев и нарративных структур. "
+                                "Ваша задача - анализировать тексты и определять их структурные элементы. "
+                                "Отвечайте структурированно, используя профессиональную терминологию."
+                            )
+                        },
+                        {
+                            "role": "user",
+                            "content": formatted_prompt
+                        }
+                    ]
                     response = self.gigachat.chat(messages)
                     return response.choices[0].message.content
                 except Exception as e:
                     logger.warning(f"GigaChat failed: {e}")
+                    # Если произошла ошибка с GigaChat, переходим к основной модели
             
+            # Добавляем указание отвечать на русском для русскоязычных текстов
+            if lang == 'ru':
+                prompt = (
+                    "Ты - эксперт по анализу сценариев. "
+                    "ВАЖНО: Весь анализ должен быть предоставлен на русском языке. "
+                    "Не обращай внимания на отдельные английские слова в сценарии. "
+                    "Не используй английский язык в ответе.\n\n"
+                    f"{prompt}"
+                )
+
             # Используем основную модель
             response = self.llm.invoke(prompt)
             if hasattr(response, 'content'):
@@ -255,6 +285,38 @@ class NarrativeEvaluator:
         except Exception as e:
             logger.error(f"LLM call failed: {e}")
             raise
+
+    def _format_prompt_for_gigachat(self, prompt: str) -> str:
+        """
+        Форматирует промпт для GigaChat, убирая потенциально проблемные элементы форматирования.
+        
+        Args:
+            prompt: Исходный промпт
+            
+        Returns:
+            str: Отформатированный промпт
+        """
+        # Убираем специальные символы и форматирование
+        formatted_prompt = prompt.replace('*', '')
+        formatted_prompt = formatted_prompt.replace('_', '')
+        formatted_prompt = formatted_prompt.replace('#', '')
+        
+        # Добавляем четкие разделители для структурных элементов
+        formatted_prompt = formatted_prompt.replace(
+            "Структурные элементы:",
+            "\nСТРУКТУРНЫЕ ЭЛЕМЕНТЫ:\n"
+        )
+        
+        # Форматируем акты и сцены
+        lines = formatted_prompt.split('\n')
+        formatted_lines = []
+        for line in lines:
+            if "Акт" in line or "Сцена" in line:
+                formatted_lines.append(f"\n{line}")
+            else:
+                formatted_lines.append(line)
+        
+        return "\n".join(formatted_lines)
 
     def classify(self, text: str) -> str:
         """
@@ -322,17 +384,58 @@ class NarrativeEvaluator:
             dict: Результаты анализа
         """
         try:
+            # Определяем язык текста в начале метода
+            lang = self._detect_language(text)
+            logger.info(f"Detected language: {lang}")
+            
+            # Проверяем входные данные
+            if not isinstance(text, str):
+                logger.error(f"Invalid input type for text: {type(text)}")
+                raise ValueError(f"Expected string, got {type(text)}")
+            
             # Используем RAG для получения релевантных частей текста
             rag_context = self.rag_processor.process_text(text)
-            
+            if not rag_context.get("chunks"):
+                raise ValueError("No chunks generated from RAG processor")
+
+            # Получаем структуру для анализа
+            narrative_structure = self.structure_converter.get_structure(structure_name)
+            if not narrative_structure:
+                error_message = "Ошибка: неверный тип структуры" if lang == 'ru' else "Error: invalid structure type"
+                return {
+                    "structure_name": "Error",
+                    "llm_evaluation": error_message,
+                    "structure_analysis": {},
+                    "visualization": None,
+                    "tokens_used": 0,
+                    "error": "Invalid structure type"
+                }
+
             # Если структура не указана, определяем её
             if structure_name is None:
                 # Используем RAG для классификации на основе релевантных частей
                 structure_name = self.classify(rag_context["chunks"][0])  # Используем первый чанк для определения структуры
             
-            # Получаем класс для работы с выбранной структурой
-            StructureClass = get_narrative_structure(structure_name)
-            narrative_structure = StructureClass()
+            # Преобразуем строку в StructureType
+            try:
+                # Важно: преобразуем строку в enum
+                structure_type = StructureType(structure_name.lower())  # добавляем .lower() для надежности
+            except ValueError as e:
+                logger.warning(f"Invalid structure_name: {structure_name}, falling back to THREE_ACT")
+                structure_type = StructureType.THREE_ACT
+            
+            # Получаем класс структуры один раз
+            narrative_structure = self.structure_converter.get_structure(structure_name)
+            if not narrative_structure:
+                error_message = "Ошибка: неверный тип структуры" if lang == 'ru' else "Error: invalid structure type"
+                return {
+                    "structure_name": "Error",
+                    "llm_evaluation": error_message,
+                    "structure_analysis": {},
+                    "visualization": None,
+                    "tokens_used": 0,
+                    "error": "Invalid structure type"
+                }
             
             # Извлекаем базовую структуру из обработанных RAG чанков
             combined_analysis = []
@@ -347,19 +450,47 @@ class NarrativeEvaluator:
             # Конвертируем в нужный формат
             formatted_structure = convert_to_format(structure, structure_name)
             
-            # Формируем и выполняем промпт с учетом контекста RAG
+            # Формирование промпта
             try:
-                base_prompt = narrative_structure.get_prompt()
-                # Добавляем контекст из RAG в промпт
+                base_prompt = (
+                    narrative_structure.get_prompt() if hasattr(narrative_structure, 'get_prompt')
+                    else (
+                        "Проанализируйте следующий текст, используя структуру {structure_name}:\n\n"
+                        "{text}\n\n"
+                        "Предоставьте подробный анализ."
+                    ) if lang == 'ru' else (
+                        "Analyze the following text using {structure_name} structure:\n\n"
+                        "{text}\n\n"
+                        "Provide detailed analysis."
+                    )
+                )
+
+                # Сначала создаем enhanced_prompt с RAG
                 enhanced_prompt = self._enhance_prompt_with_rag(
                     base_prompt, 
                     rag_context["chunks"], 
                     formatted_structure
                 )
+
+                # Затем добавляем инструкции для русского языка если нужно
+                if lang == 'ru':
+                    enhanced_prompt = (
+                        "ИНСТРУКЦИЯ: Проведите анализ текста на русском языке, "
+                        "используя профессиональную терминологию. "
+                        "Структурируйте ответ по следующим разделам:\n"
+                        "1. Общая структура\n"
+                        "2. Анализ актов\n"
+                        "3. Ключевые сюжетные точки\n"
+                        "4. Развитие персонажей\n"
+                        "5. Рекомендации по улучшению\n\n"
+                        f"{enhanced_prompt}"
+                    )
+
                 llm_evaluation = self._call_llm(enhanced_prompt)
+
             except Exception as e:
                 logger.error(f"Error during prompt evaluation: {e}")
-                llm_evaluation = "Error during evaluation"
+                llm_evaluation = "Ошибка при анализе" if lang == 'ru' else "Error during evaluation"
             
             # Проводим структурный анализ
             try:
@@ -370,6 +501,8 @@ class NarrativeEvaluator:
                 structure_analysis = {}
                 visualization = None
             
+            tokens_used = self._estimate_tokens_used(text)
+
             return {
                 "structure_name": narrative_structure.display_name,
                 "llm_evaluation": llm_evaluation,
@@ -377,14 +510,37 @@ class NarrativeEvaluator:
                 "visualization": visualization,
                 "formatted_structure": formatted_structure,
                 "raw_structure": structure,
+                "tokens_used": tokens_used,
                 "rag_context": {
                     "total_chunks": len(rag_context["chunks"]),
                     "processed_chunks": len(combined_analysis)
                 }
             }
+        
         except Exception as e:
-            logger.error(f"Error in evaluate: {e}")
-            raise
+            logger.error(f"Error during structure analysis: {e}")
+            # Возвращаем базовый результат с минимальным количеством токенов
+            return {
+                "structure_name": "Error",
+                "llm_evaluation": "Произошла ошибка при анализе",
+                "structure_analysis": {},
+                "visualization": None,
+                "tokens_used": max(100, len(text.split()) * 2),  # Минимальное количество токенов
+                "error": str(e)
+            }
+
+    def _estimate_tokens_used(self, text: str) -> int:
+        """
+        Оценивает количество использованных токенов.
+        
+        Args:
+            text: Анализируемый текст
+            
+        Returns:
+            int: Оценка количества токенов
+        """
+        # Простая оценка: примерно 4 токена на слово
+        return len(text.split()) * 4
 
     def _merge_chunk_analyses(self, analyses: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
@@ -446,23 +602,49 @@ class NarrativeEvaluator:
     ) -> str:
         """
         Улучшает базовый промпт контекстом из RAG.
-        
-        Args:
-            base_prompt: Базовый промпт
-            rag_chunks: Чанки из RAG
-            formatted_structure: Форматированная структура
-            
-        Returns:
-            str: Улучшенный промпт
         """
-        # Добавляем контекст из наиболее релевантных чанков
-        context_prompt = "\n\nRelevant context from the text:\n"
-        for i, chunk in enumerate(rag_chunks[:3], 1):  # Используем только top-3 чанка
-            context_prompt += f"\nPassage {i}:\n{chunk}\n"
+        # Ограничиваем длину контекста
+        max_context_length = 4000  # Примерное ограничение для контекста
         
-        # Добавляем информацию о структуре
-        structure_prompt = "\n\nStructural elements identified:\n"
+        # Форматируем контекст из чанков
+        context_prompt = "\nРЕЛЕВАНТНЫЕ ФРАГМЕНТЫ ТЕКСТА:\n"
+        total_length = len(context_prompt)
+        
+        # Берем только 2 наиболее релевантных чанка вместо 3
+        for i, chunk in enumerate(rag_chunks[:2], 1):
+            # Ограничиваем размер каждого чанка
+            chunk_summary = chunk[:1000] + "..." if len(chunk) > 1000 else chunk
+            chunk_text = f"\nФрагмент {i}:\n{chunk_summary}\n"
+            
+            if total_length + len(chunk_text) > max_context_length:
+                break
+                
+            context_prompt += chunk_text
+            total_length += len(chunk_text)
+        
+        # Ограничиваем информацию о структуре
+        structure_prompt = "\nКЛЮЧЕВЫЕ СТРУКТУРНЫЕ ЭЛЕМЕНТЫ:\n"
         for key, value in formatted_structure.items():
-            structure_prompt += f"\n{key}: {value}"
+            if isinstance(value, (list, dict)):
+                # Ограничиваем количество элементов в списках
+                if isinstance(value, list):
+                    value = value[:3]  # Берем только первые 3 элемента
+                elif isinstance(value, dict):
+                    value = dict(list(value.items())[:3])  # Берем только первые 3 пары
+            
+            structure_info = f"\n{key}: {str(value)[:200]}...\n" if len(str(value)) > 200 else f"\n{key}: {value}\n"
+            if total_length + len(structure_info) > max_context_length:
+                break
+                
+            structure_prompt += structure_info
+            total_length += len(structure_info)
         
-        return base_prompt + context_prompt + structure_prompt
+        # Собираем финальный промпт с учетом ограничений
+        final_prompt = (
+            f"{base_prompt[:1000]}\n"  # Ограничиваем базовый промпт
+            f"{context_prompt}\n"
+            f"{structure_prompt}\n"
+            "\nПожалуйста, предоставьте краткий анализ ключевых элементов."
+        )
+        
+        return final_prompt

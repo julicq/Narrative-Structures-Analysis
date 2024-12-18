@@ -23,8 +23,8 @@ class NarrativeRAGProcessor:
         self.llm = llm
         self.embeddings = MultilingualEmbeddings()
         self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=500,  # Уменьшаем размер чанка
-            chunk_overlap=50,  # Уменьшаем перекрытие
+            chunk_size=250,  # Уменьшаем с 500 до 250
+            chunk_overlap=25,  # Уменьшаем с 50 до 25
             length_function=len,
             separators=["\n\n", "\n", ".", "!", "?", ",", " "]
         )

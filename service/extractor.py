@@ -29,6 +29,20 @@ def get_nlp_model(text: str) -> Language:
     Returns:
         Language: Модель spaCy для соответствующего языка
     """
+    # Проверка входных данных
+    if isinstance(text, dict):
+        if "text" in text:
+            text = text["text"]
+        elif "content" in text:
+            text = text["content"]
+        else:
+            logger.error("Could not extract text from dictionary")
+            text = ""
+    
+    if not isinstance(text, str):
+        logger.error(f"Unexpected input type in get_nlp_model: {type(text)}")
+        text = str(text) if text is not None else ""
+
     # Простая эвристика для определения языка
     ru_chars = set('абвгдеёжзийклмнопрстуфхцчшщъыьэюя')
     text_chars = set(text.lower())
@@ -47,6 +61,23 @@ def extract_structure(text: str, chunk_size: Optional[int] = None) -> Dict[str, 
         Dict[str, Any]: Словарь с извлеченной структурой
     """
     try:
+        # Проверяем тип входных данных
+        if isinstance(text, dict):
+            logger.warning("Received dict instead of string, attempting to extract text content")
+            # Пытаемся извлечь текст из словаря
+            if "text" in text:
+                text = text["text"]
+            elif "content" in text:
+                text = text["content"]
+            else:
+                # Если не можем найти текст, возвращаем пустую структуру
+                logger.error("Could not extract text from dictionary")
+                return create_fallback_structure("")
+        
+        if not isinstance(text, str):
+            logger.error(f"Unexpected input type: {type(text)}")
+            return create_fallback_structure("")
+
         nlp = get_nlp_model(text)
         
         # Если указан размер чанка, разбиваем текст
@@ -61,7 +92,29 @@ def extract_structure(text: str, chunk_size: Optional[int] = None) -> Dict[str, 
             return process_text_chunk(text, nlp)
     except Exception as e:
         logger.error(f"Error extracting structure: {str(e)}")
-        return create_fallback_structure(text)
+        return create_fallback_structure("")  # Передаем пустую строку вместо словаря
+
+def create_fallback_structure(text: str) -> Dict[str, Any]:
+    """Создает базовую структуру в случае ошибки."""
+    # Проверяем входные данные
+    if not isinstance(text, str):
+        text = str(text) if text is not None else ""
+        
+    return {
+        "sentences": [text] if text else [],
+        "entities": [],
+        "word_count": len(text.split()) if text else 0,
+        "sentence_count": 1 if text else 0,
+        "paragraphs": [text] if text else [],
+        "discourse_markers": [],
+        "key_phrases": [],
+        "semantic_roles": [],
+        "metadata": {
+            "language": "unknown",
+            "complexity_score": 0.0,
+            "error": "Processing failed"
+        }
+    }
 
 def process_text_chunk(text: str, nlp: Language) -> Dict[str, Any]:
     """
@@ -174,7 +227,29 @@ def extract_discourse_markers(doc: Doc) -> List[Dict[str, str]]:
 
 def extract_key_phrases(doc: Doc) -> List[str]:
     """Извлекает ключевые фразы из текста."""
-    return [chunk.text for chunk in doc.noun_chunks]
+    try:
+        # Проверяем поддержку noun_chunks для данного языка
+        if doc.has_annotation("DEP") and doc.lang_ != 'ru':
+            return [chunk.text for chunk in doc.noun_chunks]
+        else:
+            # Альтернативный метод для русского языка
+            # Извлекаем существительные с прилагательными
+            phrases = []
+            for token in doc:
+                if token.pos_ == "NOUN":
+                    # Собираем прилагательные перед существительным
+                    modifiers = []
+                    for left_token in token.lefts:
+                        if left_token.pos_ == "ADJ":
+                            modifiers.append(left_token.text)
+                    if modifiers:
+                        phrases.append(" ".join(modifiers + [token.text]))
+                    else:
+                        phrases.append(token.text)
+            return phrases
+    except Exception as e:
+        logger.warning(f"Error extracting key phrases: {e}")
+        return []  # Возвращаем пустой список в случае ошибки
 
 def extract_semantic_roles(doc: Doc) -> List[Dict[str, str]]:
     """Извлекает семантические роли из предложений."""
@@ -418,3 +493,4 @@ def calculate_coherence(doc: Doc) -> float:
     except Exception as e:
         logger.warning(f"Error calculating coherence score: {str(e)}")
         return 0.0
+
