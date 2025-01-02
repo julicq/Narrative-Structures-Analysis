@@ -24,6 +24,7 @@ RUN poetry install --only main --no-interaction --no-ansi
 COPY . .
 
 RUN python -m spacy download en_core_web_sm
+RUN python -m spacy download ru_core_news_sm
 
 RUN mkdir -p /app/db
 
