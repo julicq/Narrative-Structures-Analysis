@@ -1,7 +1,7 @@
 # bot/telegram_bot.py
 
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 import json
 import logging
@@ -78,11 +78,12 @@ class TelegramBot:
             self.evaluator = NarrativeEvaluator(
                 llm=model,
                 gigachat_token=settings.gigachat_token,
-                model_type=str(active_model)  # Convert to string if needed by NarrativeEvaluator
+                model_type=str(active_model)
             )
 
             # Register handlers
             self.register_handlers()
+            self._initialized = True
             
         except Exception as e:
             logger.error(f"Error setting up bot: {e}")
@@ -125,8 +126,6 @@ class TelegramBot:
             self.setup()
         
         logger.info("Starting bot...")
-        self.application.run_polling(allowed_updates=Update.ALL_TYPES)
-
         try:
             self.application.run_polling(allowed_updates=Update.ALL_TYPES)
         finally:
@@ -140,11 +139,10 @@ class TelegramBot:
         logger.info("Starting bot polling...")
         self._running = True
         
-        # Больше не нужно вызывать initialize() и start() отдельно
         await self.application.run_polling(
             allowed_updates=Update.ALL_TYPES,
-            close_loop=False  # Важный параметр!
-    )
+            close_loop=False
+        )
 
     def get_main_keyboard(self):
         """Создание основной клавиатуры"""
@@ -156,37 +154,41 @@ class TelegramBot:
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /start"""
-        if not update.effective_user:
+        if not update.effective_user or not update.effective_chat:
             return
                 
         user = update.effective_user
         user_id = user.id
         user_data = self.db.get_user_data(user_id)
         chat_id = update.effective_chat.id
-        # Если у пользователя нет баланса, устанавливаем значение по умолчанию
-        if "token_balance" not in user_data:
+
+        # Initialize balance if needed
+        balance = self.DEFAULT_TOKEN_BALANCE
+        if user_data and "token_balance" in user_data:
+            balance = user_data["token_balance"]
+        if not user_data or balance == 0:
             self.db.update_user_balance(user_id, self.DEFAULT_TOKEN_BALANCE)
             balance = self.DEFAULT_TOKEN_BALANCE
-        else:
-            balance = user_data["token_balance"]
-        if balance == 0:
-            self.db.update_user_balance(user_id, self.DEFAULT_TOKEN_BALANCE)
+
         logger.info(f"Start command received from user {user.id} in chat {chat_id}")
         
         keyboard = self.get_main_keyboard()
-        await update.message.reply_text(
+        welcome_message = (
             f"Привет, {user.first_name}! 👋\n"
             "Я бот для анализа нарративных структур в сценариях.\n"
-            "Выберите действие в нижнем меню или отправьте текст для анализа (имейте в виду, что в одном сообщении можно отправить максимум 4096 символов текста) - если сценарий большой, лучше прикрепить файл:",
-            reply_markup=keyboard
+            "Выберите действие в нижнем меню или отправьте текст для анализа "
+            "(имейте в виду, что в одном сообщении можно отправить максимум 4096 символов текста) - "
+            "если сценарий большой, лучше прикрепить файл."
         )
-        # Добавим информацию о балансе и лимитах
-        await update.message.reply_text(
-            f"{update.message.text}\n\n"
-            f"Ваш текущий баланс: {balance} токенов\n"
+        
+        balance_info = (
+            f"\n\nВаш текущий баланс: {balance} токенов\n"
             f"Лимит страниц на анализ: {self.PAGE_LIMIT}\n"
             f"Используйте /balance для проверки баланса и /limits для просмотра лимитов."
         )
+
+        await update.message.reply_text(welcome_message, reply_markup=keyboard)
+        await update.message.reply_text(balance_info)
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         help_text = (
@@ -205,13 +207,7 @@ class TelegramBot:
             "Обратите внимание на ограничения по количеству страниц и токенов.\n"
             "Запросы на пополнение баланса рассматриваются администратором."
         )
-        await update.message.reply_text(
-            help_text,
-            parse_mode=ParseMode.HTML
-        )
-
-
-
+        await update.message.reply_text(help_text, parse_mode=ParseMode.HTML)
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик текстовых сообщений"""
@@ -223,14 +219,12 @@ class TelegramBot:
         
         logger.info(f"Received message from {chat_id}: {text}")
         
-        # Обработка кнопок меню
         if text in ["Выбрать структуру", "Помощь", "Автоопределение структуры"]:
             logger.info(f"Processing menu button: {text}")
             await self.handle_button(update, context)
             return
 
         try:
-            # Отправляем сообщение о начале обработки
             processing_message = await update.message.reply_text(
                 "🔄 Анализирую текст... Это может занять некоторое время."
             )
@@ -291,24 +285,97 @@ class TelegramBot:
         
         try:
             await query.answer()
-            chat_id = update.effective_chat.id
-            
-            # Сохраняем выбранную структуру
+            structure_name = StructureType.get_display_name(query.data)
             context.user_data['selected_structure'] = query.data
             
-            # Обновляем сообщение с подтверждением выбора
-            structure_name = StructureType.get_display_name(query.data)
             await query.edit_message_text(
                 f"✅ Выбрана структура: {structure_name}\n\n"
                 "Теперь отправьте текст или файл для анализа."
             )
             
-            logger.info(f"Structure selected for chat {chat_id}: {query.data}")
-            
         except Exception as e:
             logger.error(f"Error in button handler: {e}", exc_info=True)
             await query.edit_message_text(
                 "❌ Произошла ошибка при выборе структуры. Попробуйте еще раз."
+            )
+
+    async def process_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, structure: str):
+        """Обработка текста и отправка результатов анализа"""
+        if not update.effective_user:
+            return
+
+        user_id = update.effective_user.id
+        user_data = self.db.get_user_data(user_id)
+        
+        # Initialize user data if needed
+        if not user_data or "token_balance" not in user_data:
+            user_data = {"token_balance": self.DEFAULT_TOKEN_BALANCE}
+            self.db.update_user_balance(user_id, self.DEFAULT_TOKEN_BALANCE)
+
+        # Estimate token usage
+        estimated_tokens = len(text.split()) * 4
+        current_balance = user_data["token_balance"]
+
+        if estimated_tokens > current_balance:
+            await update.message.reply_text(
+                f"❌ Недостаточно токенов для анализа. "
+                f"Требуется примерно {estimated_tokens} токенов, "
+                f"доступно: {current_balance}."
+            )
+            return
+        
+        try:
+            # Auto-detect structure if needed
+            if structure == "Auto-detect":
+                try:
+                    structure = self.evaluator.classify(text)
+                    logger.info(f"Auto-detected structure: {structure}")
+                except Exception as e:
+                    logger.error(f"Error in structure classification: {e}")
+                    await update.message.reply_text(
+                        "❌ Ошибка при определении структуры. "
+                        "Попробуйте выбрать структуру вручную."
+                    )
+                    return
+
+            # Analyze text
+            result = self.evaluator.evaluate(text, structure)
+            
+            # Get tokens used (with fallback)
+            tokens_used = result.get('tokens_used')
+            if tokens_used is None:
+                tokens_used = estimated_tokens
+            
+            # Update balance
+            new_balance = self.balance_service.use_tokens(user_id, tokens_used)
+            if new_balance is None:
+                new_balance = current_balance - tokens_used
+                self.balance_service.set_balance(user_id, new_balance)
+
+            # Format response
+            structure_name = result.get('structure_name', 'Не определена')
+            evaluation_text = result.get('llm_evaluation', 'Нет данных')
+            
+            main_response = (
+                "✅ <b>Анализ завершен</b>\n\n"
+                f"<b>Структура</b>: {structure_name}\n\n"
+                f"<b>Анализ</b>:\n{evaluation_text}"
+            )
+            
+            tokens_info = (
+                                f"\n\n<b>Использовано токенов</b>: {tokens_used}\n"
+                f"<b>Остаток токенов</b>: {new_balance}"
+            )
+            
+            # Send responses
+            await update.message.reply_text(main_response, parse_mode=ParseMode.HTML)
+            await update.message.reply_text(tokens_info, parse_mode=ParseMode.HTML)
+            
+        except Exception as e:
+            logger.error(f"Error in text analysis: {e}", exc_info=True)
+            await update.message.reply_text(
+                "❌ Произошла ошибка при анализе текста. Пожалуйста, попробуйте позже.",
+                parse_mode=ParseMode.HTML
             )
 
     async def handle_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -392,174 +459,141 @@ class TelegramBot:
                 "❌ Произошла ошибка при обработке файла. "
                 "Пожалуйста, убедитесь, что файл не поврежден и попробуйте снова."
             )
-    
+
     async def balance_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик команды /balance"""
+        if not update.effective_user:
+            return
+            
         user_id = update.effective_user.id
         try:
             user_data = self.db.get_user_data(user_id)
             if user_data is None or "token_balance" not in user_data:
-                # Если данных пользователя нет или нет информации о балансе,
-                # устанавливаем значение по умолчанию
                 balance = self.DEFAULT_TOKEN_BALANCE
                 self.db.update_user_balance(user_id, balance)
             else:
                 balance = user_data["token_balance"]
             
             await update.message.reply_text(
-                f"Ваш текущий баланс: {balance} токенов.",
+                f"💰 <b>Ваш текущий баланс</b>: {balance} токенов",
                 parse_mode=ParseMode.HTML
             )
         except Exception as e:
             logger.error(f"Error in balance_command for user {user_id}: {e}", exc_info=True)
             await update.message.reply_text(
-                "Произошла ошибка при получении баланса. Пожалуйста, попробуйте позже или обратитесь к администратору.",
-                parse_mode=ParseMode.HTML
+                "❌ Произошла ошибка при получении баланса. "
+                "Пожалуйста, попробуйте позже или обратитесь к администратору."
             )
 
-
     async def limits_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик команды /limits"""
         await update.message.reply_text(
-            f"Текущие лимиты:\n"
-            f"- Максимальное количество страниц на анализ: {self.PAGE_LIMIT}\n"
-            f"- Примерное количество токенов на страницу: {self.TOKENS_PER_PAGE}\n"
-            f"- Максимальное количество токенов на анализ: {self.PAGE_LIMIT * self.TOKENS_PER_PAGE}"
+            f"📊 <b>Текущие лимиты</b>:\n"
+            f"• Максимальное количество страниц на анализ: {self.PAGE_LIMIT}\n"
+            f"• Примерное количество токенов на страницу: {self.TOKENS_PER_PAGE}\n"
+            f"• Максимальное количество токенов на анализ: {self.PAGE_LIMIT * self.TOKENS_PER_PAGE}",
+            parse_mode=ParseMode.HTML
         )
 
     async def add_tokens_request(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик команды /add_tokens"""
+        if not update.effective_user:
+            return
+            
         user = update.effective_user
         try:
+            if not context.args:
+                await update.message.reply_text(
+                    "❌ Пожалуйста, укажите количество токенов для пополнения.\n"
+                    "Пример: /add_tokens 1000"
+                )
+                return
+                
             amount = int(context.args[0])
             if amount <= 0:
-                raise ValueError("Количество токенов должно быть положительным числом")
+                await update.message.reply_text(
+                    "❌ Количество токенов должно быть положительным числом."
+                )
+                return
             
             await context.bot.send_message(
                 chat_id=self.admin_id,
-                text=f"Пользователь {user.first_name} (ID: {user.id}) запросил пополнение баланса на {amount} токенов.\n"
-                     f"Для подтверждения используйте команду:\n"
-                     f"/approve_tokens {user.id} {amount}"
+                text=(
+                    f"💰 Запрос на пополнение баланса\n"
+                    f"От: {user.first_name} (ID: {user.id})\n"
+                    f"Количество: {amount} токенов\n\n"
+                    f"Для подтверждения используйте команду:\n"
+                    f"/approve_tokens {user.id} {amount}"
+                )
             )
             
-            await update.message.reply_text("Ваш запрос на пополнение баланса отправлен администратору. Пожалуйста, ожидайте подтверждения.")
-        except (IndexError, ValueError):
-            await update.message.reply_text("Пожалуйста, укажите корректное количество токенов для пополнения. Например: /add_tokens 1000")
+            await update.message.reply_text(
+                "✅ Ваш запрос на пополнение баланса отправлен администратору.\n"
+                "Пожалуйста, ожидайте подтверждения."
+            )
+            
+        except ValueError:
+            await update.message.reply_text(
+                "❌ Пожалуйста, укажите корректное количество токенов.\n"
+                "Пример: /add_tokens 1000"
+            )
 
     async def approve_tokens_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик команды /approve_tokens"""
         try:
+            if len(context.args) != 2:
+                await update.message.reply_text(
+                    "❌ Неверный формат команды.\n"
+                    "Используйте: /approve_tokens <user_id> <amount>"
+                )
+                return
+                
             user_id = int(context.args[0])
             amount = int(context.args[1])
+            
+            if amount <= 0:
+                await update.message.reply_text("❌ Количество токенов должно быть положительным числом.")
+                return
+                
             new_balance = self.balance_service.add_tokens(user_id, amount)
             
+            # Отправляем уведомление пользователю
             await context.bot.send_message(
                 chat_id=user_id,
-                text=f"Ваш запрос на пополнение баланса одобрен. Добавлено {amount} токенов. Новый баланс: {new_balance} токенов."
+                text=(
+                    "✅ Ваш запрос на пополнение баланса одобрен!\n"
+                    f"Добавлено: {amount} токенов\n"
+                    f"Новый баланс: {new_balance} токенов"
+                )
             )
             
-            await update.message.reply_text(f"Баланс пользователя (ID: {user_id}) успешно пополнен на {amount} токенов. Новый баланс: {new_balance}")
-        except (IndexError, ValueError):
-            await update.message.reply_text("Пожалуйста, используйте команду в формате: /approve_tokens <user_id> <amount>")
-
-    async def process_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, structure: str):
-        """Обработка текста и отправка результатов анализа"""
-        chat_id = update.effective_chat.id
-        user_id = update.effective_user.id
-        user_data = self.db.get_user_data(user_id)
-        logger.info(f"Processing text for chat {chat_id} with structure {structure}")
-        
-        # Проверяем наличие баланса токенов в данных пользователя
-        if "token_balance" not in user_data:
-            # Если баланса нет, устанавливаем значение по умолчанию
-            user_data["token_balance"] = self.DEFAULT_TOKEN_BALANCE
-            self.db.update_user_balance(user_id, self.DEFAULT_TOKEN_BALANCE)
-        
-        # Проверяем баланс токенов
-        if user_data["token_balance"] <= 0:
-            await update.message.reply_text("У вас недостаточно токенов для анализа. Пожалуйста, обратитесь к администратору для пополнения баланса.")
-            return
-
-        # Оцениваем количество токенов перед анализом
-        estimated_tokens = len(text.split()) * 4  # Примерная оценка: 4 токена на слово
-        current_balance = self.balance_service.get_balance(user_id)
-
-        if estimated_tokens > user_data["token_balance"]:
-            await update.message.reply_text(f"Недостаточно токенов для анализа. Требуется примерно {estimated_tokens} токенов, а у вас {user_data['token_balance']}.")
-            return
-        
-        try:
-            if structure == "Auto-detect":
-                try:
-                    structure = self.evaluator.classify(text)
-                    logger.info(f"Auto-detected structure: {structure}")
-                except Exception as e:
-                    logger.error(f"Error in structure classification: {e}")
-                    await update.message.reply_text(
-                        "❌ Ошибка при определении структуры. Попробуйте выбрать структуру вручную."
-                    )
-                    return
-
-            try:
-                # Анализируем текст
-                result = self.evaluator.evaluate(text, structure)
-                
-                # Определяем количество использованных токенов
-                tokens_used = result.get('tokens_used', len(text.split()) * 4)
-                
-                # Проверяем и обновляем баланс
-                current_balance = self.balance_service.get_balance(user_id)
-                if current_balance < tokens_used:
-                    await update.message.reply_text(
-                        f"❌ Недостаточно токенов для анализа. Необходимо: {tokens_used}, доступно: {current_balance}."
-                    )
-                    return
-                    
-                new_balance = self.balance_service.use_tokens(user_id, tokens_used)
-                
-                # Формируем ответное сообщение с HTML-разметкой
-                structure_name = result.get('structure_name', 'Не определена')
-                evaluation_text = result.get('llm_evaluation', 'Нет данных')
-                
-                # Основная часть анализа
-                main_response = (
-                    "✅ <b>Анализ завершен</b>\n\n"
-                    f"<b>Структура</b>: {structure_name}\n\n"
-                    f"<b>Анализ</b>:\n{evaluation_text}"
-                )
-                
-                # Информация о токенах
-                tokens_info = (
-                    f"\n\n<b>Использовано токенов</b>: {tokens_used}\n"
-                    f"<b>Остаток токенов</b>: {new_balance}"
-                )
-                
-                # Отправляем сообщения
-                await update.message.reply_text(
-                    main_response, 
-                    parse_mode=ParseMode.HTML
-                )
-                
-                await update.message.reply_text(
-                    tokens_info,
-                    parse_mode=ParseMode.HTML
-                )
-                
-            except Exception as e:
-                logger.error(f"Error in analysis: {e}", exc_info=True)
-                await update.message.reply_text(
-                    "❌ Произошла ошибка при анализе текста. Пожалуйста, попробуйте позже.",
-                    parse_mode=ParseMode.HTML
-                )
-                    
-        except Exception as e:
-            logger.error(f"Error in process_text: {e}", exc_info=True)
+            # Отправляем подтверждение администратору
             await update.message.reply_text(
-                "❌ Произошла ошибка при обработке текста. Пожалуйста, попробуйте позже.",
-                parse_mode=ParseMode.HTML
+                f"✅ Баланс пользователя (ID: {user_id}) успешно пополнен!\n"
+                f"Добавлено: {amount} токенов\n"
+                f"Новый баланс: {new_balance} токенов"
+            )
+            
+        except (ValueError, IndexError):
+            await update.message.reply_text(
+                "❌ Ошибка в формате команды.\n"
+                "Используйте: /approve_tokens <user_id> <amount>"
+            )
+        except Exception as e:
+            logger.error(f"Error in approve_tokens_command: {e}", exc_info=True)
+            await update.message.reply_text(
+                "❌ Произошла ошибка при пополнении баланса.\n"
+                "Пожалуйста, проверьте параметры и попробуйте снова."
             )
 
     async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик ошибок"""
         logger.error(f"Exception while handling an update: {context.error}", exc_info=True)
         
+        error_message = (
+            "❌ Произошла ошибка при обработке запроса.\n"
+            "Пожалуйста, попробуйте позже или обратитесь к администратору."
+        )
+        
         if update and update.effective_message:
-            await update.effective_message.reply_text(
-                "❌ Произошла ошибка при обработке запроса. Пожалуйста, попробуйте позже."
-            )
+            await update.effective_message.reply_text(error_message)

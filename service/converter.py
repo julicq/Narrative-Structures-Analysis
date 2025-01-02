@@ -4,7 +4,9 @@ from dataclasses import dataclass
 from typing import Dict, List, Callable, Optional, Any
 from enum import Enum
 import math
+import logging
 
+logger = logging.getLogger(__name__)
 class StoryStructure(Enum):
     FOUR_ACT = "four_act"
     THREE_ACT = "three_act"
@@ -28,6 +30,119 @@ class StructureDefinition:
     name: str
     segments: List[StorySegment]
     description: str
+    
+    def analyze(self, structure: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Анализирует структуру повествования.
+        
+        Args:
+            structure: Структура для анализа
+            
+        Returns:
+            Dict[str, Any]: Результаты анализа
+        """
+        analysis = {
+            "segments": {},
+            "proportions": {},
+            "completeness": 0.0,
+            "balance": 0.0
+        }
+        
+        # Анализируем каждый сегмент
+        total_content = 0
+        for segment in self.segments:
+            segment_content = structure.get(segment.name, "")
+            content_length = len(segment_content.split()) if segment_content else 0
+            analysis["segments"][segment.name] = {
+                "content_length": content_length,
+                "expected_proportion": segment.proportion,
+                "completeness": 1.0 if content_length > 0 else 0.0,
+                "balance": 0.0  # Initialize balance for each segment
+            }
+            total_content += content_length
+        
+        # Вычисляем реальные пропорции и баланс
+        if total_content > 0:
+            for segment_name, segment_data in analysis["segments"].items():
+                actual_proportion = segment_data["content_length"] / total_content
+                expected_proportion = segment_data["expected_proportion"]
+                analysis["proportions"][segment_name] = actual_proportion
+                
+                # Оцениваем баланс сегмента
+                proportion_diff = abs(actual_proportion - expected_proportion)
+                segment_data["balance"] = max(0.0, 1.0 - proportion_diff)
+        
+        # Вычисляем общие метрики
+        analysis["completeness"] = sum(s["completeness"] for s in analysis["segments"].values()) / len(self.segments)
+        analysis["balance"] = sum(s["balance"] for s in analysis["segments"].values()) / len(self.segments)
+        
+        return analysis
+    
+    def visualize(self, analysis: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Создает визуализацию анализа структуры.
+        
+        Args:
+            analysis: Результаты анализа
+            
+        Returns:
+            Optional[Dict[str, Any]]: Данные для визуализации
+        """
+        try:
+            visualization = {
+                "structure_name": self.name,
+                "segments": [],
+                "metrics": {
+                    "completeness": analysis.get("completeness", 0.0),
+                    "balance": analysis.get("balance", 0.0)
+                }
+            }
+            
+            # Формируем данные для каждого сегмента
+            for segment in self.segments:
+                segment_data = analysis.get("segments", {}).get(segment.name, {})
+                visualization["segments"].append({
+                    "name": segment.name,
+                    "expected_proportion": segment.proportion,
+                    "actual_proportion": analysis.get("proportions", {}).get(segment.name, 0.0),
+                    "completeness": segment_data.get("completeness", 0.0),
+                    "balance": segment_data.get("balance", 0.0)
+                })
+            
+            return visualization
+            
+        except Exception as e:
+            logger.error(f"Error creating visualization: {e}")
+            return None
+    
+    def get_prompt(self) -> str:
+        """
+        Возвращает промпт для анализа структуры.
+        
+        Returns:
+            str: Промпт для анализа
+        """
+        return f"""Analyze the following text using {self.name} structure.
+        Structure segments: {', '.join(segment.name for segment in self.segments)}
+        Description: {self.description}
+        
+        Focus on:
+        1. How well the text follows the expected structure
+        2. Balance between segments
+        3. Completeness of each segment
+        4. Overall narrative flow
+        
+        Please provide a concise analysis."""
+    
+    @property
+    def display_name(self) -> str:
+        """
+        Возвращает отображаемое имя структуры.
+        
+        Returns:
+            str: Отображаемое имя
+        """
+        return self.name
 
 class StoryStructureConverter:
     """Конвертер для различных структур повествования."""
