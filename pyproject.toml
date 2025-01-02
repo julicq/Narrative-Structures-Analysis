@@ -34,6 +34,7 @@ docx2txt = "^0.8"
 faiss-cpu = "^1.9.0.post1"
 torch = {version = "^2.5.1", extras = ["cpu"]}
 pytest = "^8.3.4"
+sentence-transformers = "^3.3.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.3"
