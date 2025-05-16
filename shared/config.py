@@ -109,7 +109,7 @@ class Config(BaseSettings):
         return credentials.get(model_type)
 
     def validate_model_credentials(self, model_type: ModelType) -> bool:
-        """Проверка наличия необходимых учетных данных для модели"""
+        """Проверка наличия необходимых учетных данных для модели LLM"""
         credentials = self.get_model_credentials(model_type)
         if not credentials:
             return False
